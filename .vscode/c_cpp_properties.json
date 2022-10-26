@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Keil_arm",
+            "includePath": [
+                "${workspaceFolder}/code/**",
+                "C:/Users/Artem/AppData/Local/Arm/Packs/Keil/MDR1986BExx/1.4/Libraries/CMSIS/CM3/DeviceSupport/MDR32F9Qx/**",
+                "C:/Users/Artem/AppData/Local/Arm/Packs/ARM/CMSIS/5.9.0/CMSIS/Core/**"
+            ],
+            "defines": [
+                "DEBUG"
+            ],
+            "cStandard": "gnu17",
+            "compilerPath": "C:/toolchain/gcc-arm-none-eabi-9-2020-q2-update-win32/bin/arm-none-eabi-gcc.exe",
+            "intelliSenseMode": "gcc-arm",
+            "browse": {
+                // "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
