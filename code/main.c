@@ -48,30 +48,19 @@ volatile int16_t next_angle = 460; //// ???? =913  ???
 volatile int16_t last_angle = 0;
 volatile int16_t next_angle2 = 0;
 volatile int16_t next_angle_mode = 0;
-volatile int16_t next_angle_sin = 0;
-volatile int16_t next_angle_cos = 0;
 
 volatile int16_t next_Sin_high = 0;
 volatile int16_t next_Cos_high = 0;
 volatile int16_t next_Sin_low = 0;
 volatile int16_t next_Cos_low = 0;
 
-volatile int8_t coeff_sin = 1;
-volatile int8_t coeff_cos = 1;
-volatile int8_t next_coeff_sin = 1;
-volatile int8_t next_coeff_cos = 1;
-
 /* Variables for offset sin,cos ---------------------------------------------------------*/
-uint8_t Sin_first = 1; // if == 0, cos - first
 uint16_t Sin_delay = 0;
-uint8_t negative = 0;
 
 uint8_t NewData = 0;
 
 uint16_t period = 0;
 uint32_t period_mcs = 0;
-
-
 
 /* Variables for UART ---------------------------------------------------------*/
 #define RX_BUFFER_SIZE 6
@@ -106,8 +95,6 @@ uint8_t TxMassivNoZap[6] = {0x14, 0x00, 0x00, 0x00, 0x01, 0x15};
 uint8_t TxMassivSmallZap[6] = {0x15, 0x00, 0x00, 0x00, 0x00, 0x15};
 
 uint8_t i;
-
-uint8_t flag_diff = 0;
 
 /* Variables for Parallaks ---------------------------------------------------------*/
 
@@ -225,8 +212,6 @@ static uint32_t isvalid_kama_data(SphCoord_t coord)
 
 SphCoord_t N_Coord_Kama, N_Coord_MRL;
 
-
-
 #ifdef __CC_ARM
 int main(void)
 #else
@@ -238,7 +223,7 @@ void main(void)
     NVIC->ICER[0] = 0xFFFFFFFF;
 
     rcc_init();
-    gpio_init();    
+    gpio_init();
 
     timer1_init();
     timer2_init();
@@ -717,44 +702,7 @@ void Parallaks(void)
 
 void Check_next_angle()
 {
-    if (counter_ext != 0) {
-        if (next_angle >= last_angle) {
-            if ((next_angle - last_angle) <= 50) {
-                Angle_Out_Mode = None;
-                flag_diff = 1;
-            } else if ((3600 - next_angle) + last_angle <= 50) {
-                Angle_Out_Mode = None;
-                flag_diff = 1;
-            } else {
-                if ((next_angle - last_angle) <= 1800) {
-                    Angle_Out_Mode = Up;
-                } else {
-                    Angle_Out_Mode = Down;
-                }
-            }
-        } else {
-            if ((last_angle - next_angle) <= 50) {
-                Angle_Out_Mode = None;
-                flag_diff = 1;
-            } else if ((3600 - last_angle) + next_angle <= 50) {
-                Angle_Out_Mode = None;
-                flag_diff = 1;
-            } else {
-                if ((last_angle - next_angle) <= 1800) {
-                    Angle_Out_Mode = Down;
-                } else {
-                    Angle_Out_Mode = Up;
-                }
-            }
-        }
-    } else {
-        flag_diff = 1;
-    }
-    if (flag_diff == 1) {
-        flag_diff = 0;
-
-        Calc_Ampl(next_angle);
-    }
+    Calc_Ampl(next_angle);
 }
 
 void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20])
@@ -779,7 +727,6 @@ void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20])
     }
     //	ParseEnable = 1;
 }
-
 
 volatile unsigned int SinOutL;
 volatile unsigned int CosOutL;
@@ -812,7 +759,6 @@ void Timer2_IRQHandler(void)
     TIMER_Cmd(MDR_TIMER2, DISABLE);
     MDR_TIMER2->CNT = 0x00000000;
 }
-
 
 void Timer1_IRQHandler(void)
 {
@@ -995,8 +941,6 @@ void Timer1_IRQHandler(void)
         counter_ext2++;
     }
 }
-
-
 
 void Timer3_IRQHandler(void)
 {
