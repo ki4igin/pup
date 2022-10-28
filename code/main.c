@@ -445,31 +445,12 @@ void main(void)
                     } else if (RxMassiv[0] == 0x16) {
                         // Zero_Ref = Sensor_Shift + (RxMassiv[1] << 8) + RxMassiv[2];
                         Zero_Ref = (RxMassiv[1] << 8) + RxMassiv[2];
-                        // if (Zero_Ref > 3599) {
-                        //     Zero_Ref = Zero_Ref - 3600;
-                        // }
-                        // if (Zero_Ref < 0) {
-                        //     Zero_Ref = Zero_Ref + 3600;
-                        // }
+
                         Check_next_angle();
                     } else if (RxMassiv[0] == 0x8B) {
                         d_period = (RxMassiv[1] << 8) + RxMassiv[2];
                     }
 
-                    //					else if ( RxMassiv[0] == 0x88) // Change mode to Parallaks
-                    //					{
-                    //						if (RxMassiv[3] == 1)
-                    //						{
-                    //							Angle_In_Mode = 1;
-                    //							NVIC_EnableIRQ(UART1_IRQn);
-                    //						}
-                    //						else
-                    //						{
-                    //							Angle_In_Mode = 0;
-                    //							NVIC_DisableIRQ(UART1_IRQn);
-                    //						}
-                    //
-                    //					}
                 }
             }
             if (flag_tx_ready == 1) {
@@ -607,7 +588,7 @@ void UART2_IRQHandler(void)
     if (UART_GetFlagStatus(MDR_UART2, UART_FLAG_RXFF) == SET) {
         ReciveByte = (uint8_t)UART_ReceiveData(MDR_UART2);
         if (RxEnable == 0) {
-            if (ReciveByte == 0x88 | ReciveByte == 0x11 | ReciveByte == 0x12 | ReciveByte == 0x8B | ReciveByte == 0x13 | ReciveByte == 0x16) {
+            if (ReciveByte == 0x11 | ReciveByte == 0x12 | ReciveByte == 0x13 | ReciveByte == 0x16) {
                 RxEnable = 1;
                 RxCnt = 0;
                 RxMassiv[RxCnt] = ReciveByte;
