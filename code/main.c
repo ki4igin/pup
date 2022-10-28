@@ -19,20 +19,9 @@
 #include "dac.h"
 #include "timer.h"
 #include "sin_signal.h"
-/* Private typedef -----------------------------------------------------------*/
-/* Private define ------------------------------------------------------------*/
-/* Private macro -------------------------------------------------------------*/
-/* Private variables ---------------------------------------------------------*/
-
-// Zero_Ref - shift bitwin zeros VT-sensor and drive-sensor
-#define Sensor_Shift 450
+#include "cor_offset_amp.h"
 
 int16_t Zero_Ref = 0;
-
-PORT_InitTypeDef PORT_InitStructure;
-TIMER_CntInitTypeDef sTIM_CntInit;
-
-UART_InitTypeDef UART_InitStructure;
 
 uint8_t ReciveByte = 0x00;
 
@@ -95,8 +84,6 @@ uint8_t TxMassivNoZap[6] = {0x14, 0x00, 0x00, 0x00, 0x01, 0x15};
 uint8_t TxMassivSmallZap[6] = {0x15, 0x00, 0x00, 0x00, 0x00, 0x15};
 
 uint8_t i;
-
-const int8_t cor_offset_amp[3600][2] = {0};
 
 /* Variables for Parallaks ---------------------------------------------------------*/
 
@@ -565,6 +552,7 @@ void SysTick_Handler(void)
 
 void Calc_Ampl(int16_t deg)
 {
+    // shift bitwin zeros VT-sensor and drive-sensor
     const int32_t sensor_shift[] = {
         [PUP_AZ] = -1350,
         [PUP_EL] = 0};
