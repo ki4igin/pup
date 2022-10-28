@@ -172,12 +172,26 @@ void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20]);
 void Parallaks(void);
 void Check_next_angle(void);
 
+static enum cmd {
+    CMD_MODE = 0x1,
+    CMD_DEG = 0x2,
+    CMD_SHIFT = 0x3,
+    CMD_COR_OPERATOR = 0x6,
+    CMD_COR_KAMA = 0x7,
+    CMD_VER = 0xF,
+} cmd;
+
 static enum pup {
     PUP_AZ = 0,
     PUP_EL = 1
 } pup;
 
 static uint32_t cnt_rx_kama = 0;
+
+static uint8_t get_cmd_id(enum pup p, enum cmd c)
+{
+    uint8_t id = ((p + 1) << 4) | (c && 0xF);
+}
 
 static uint32_t isvalid_kama_data(SphCoord_t coord)
 {
@@ -707,7 +721,6 @@ void Timer2_IRQHandler(void)
         SinOutL = Sin_low;
         CosOutL = Cos_low;
     } else {
-
     }
 
     MDR_TIMER2->STATUS = 0;
