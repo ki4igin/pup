@@ -96,6 +96,8 @@ uint8_t TxMassivSmallZap[6] = {0x15, 0x00, 0x00, 0x00, 0x00, 0x15};
 
 uint8_t i;
 
+const int8_t cor_offset_amp[3600][2] = {0};
+
 /* Variables for Parallaks ---------------------------------------------------------*/
 
 uint8_t Angle_In_Mode = 0; // if = 1 - Parallaks Mode
@@ -183,6 +185,11 @@ void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20]);
 void Parallaks(void);
 void Check_next_angle(void);
 
+static enum pup {
+    PUP_AZ = 0,
+    PUP_EL = 1
+} pup;
+
 static uint32_t cnt_rx_kama = 0;
 
 static uint32_t isvalid_kama_data(SphCoord_t coord)
@@ -225,6 +232,11 @@ void main(void)
     rcc_init();
     gpio_init();
 
+    relays_off();
+    led_red_on();
+
+    pup = PORT_ReadInputDataBit(MDR_PORTD, PORT_Pin_15) ? PUP_EL : PUP_AZ;
+
     timer1_init();
     timer2_init();
     timer3_init();
@@ -236,10 +248,7 @@ void main(void)
     dac_all_init();
 
     /* Init Angle as 46 grad */ //// ??????????????
-    Sin_high = 0;
-    Sin_low = sin_signal[890];
-    Cos_high = sin_signal[10];
-    Cos_low = 0;
+    Calc_Ampl(460);
 
     /* Set PIN SHDN of RS232 */
     PORT_SetBits(MDR_PORTB, PORT_Pin_11);
@@ -252,18 +261,14 @@ void main(void)
 
     // ParalaxCalc_fixpt_initialize();
     ParalaksInit();
-    PORT_SetBits(MDR_PORTB, PORT_Pin_12);
+
     while (1) {
         if (flag_not_zapit == 1) {
             flag_not_zapit = 0;
             flag_zapit = 0;
             cnt_systick = 0;
-            PORT_ResetBits(MDR_PORTC, PORT_Pin_4);
-            PORT_ResetBits(MDR_PORTC, PORT_Pin_5);
-            PORT_ResetBits(MDR_PORTC, PORT_Pin_6);
-            PORT_SetBits(MDR_PORTB, PORT_Pin_12);
-            PORT_ResetBits(MDR_PORTB, PORT_Pin_13);
-            PORT_ResetBits(MDR_PORTB, PORT_Pin_14);
+            relays_off();
+            led_red_only_on();
 
             counter_ext = 0;
             counter_ext2 = 0;
@@ -361,13 +366,9 @@ void main(void)
                     ParseEnable = 0;
                     if (RxMassiv[0] == 0x11) {
                         switch (RxMassiv[4]) {
-                        case 0x00: // relay switch off
-                            PORT_ResetBits(MDR_PORTC, PORT_Pin_4);
-                            PORT_ResetBits(MDR_PORTC, PORT_Pin_5);
-                            PORT_ResetBits(MDR_PORTC, PORT_Pin_6);
-                            PORT_SetBits(MDR_PORTB, PORT_Pin_12);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_13);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_14);
+                        case 0x00:
+                            relays_off();
+                            led_red_only_on();
                             counter_ext = 0;
                             counter_ext2 = 0;
                             Mode = Single;
@@ -382,12 +383,8 @@ void main(void)
                             flag_not_zapit = 0;
                             flag_zapit = 0;
                             cnt_systick = 0;
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_4);
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_5);
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_6);
-                            PORT_SetBits(MDR_PORTB, PORT_Pin_13);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_12);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_14);
+                            relays_on();
+                            led_yellow_only_on();
 
                             // Mode = Complex;
                             if (Mode == Single) {
@@ -405,13 +402,8 @@ void main(void)
                             flag_not_zapit = 0;
                             flag_zapit = 0;
                             cnt_systick = 0;
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_4);
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_5);
-                            PORT_SetBits(MDR_PORTC, PORT_Pin_6);
-
-                            PORT_SetBits(MDR_PORTB, PORT_Pin_14);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_13);
-                            PORT_ResetBits(MDR_PORTB, PORT_Pin_12);
+                            relays_on();
+                            led_green_only_on();
 
                             if (Mode == Single) {
                                 Pre_Complex_Kama = 1;
@@ -573,7 +565,11 @@ void SysTick_Handler(void)
 
 void Calc_Ampl(int16_t deg)
 {
-    deg = deg - 1350 + Zero_Ref;
+    const int32_t sensor_shift[] = {
+        [PUP_AZ] = -1350,
+        [PUP_EL] = 0};
+
+    deg = deg + Zero_Ref + sensor_shift[pup] + cor_offset_amp[deg][pup];
     if (deg > 1800) {
         deg = deg - 3600;
     } else if (deg <= -1800) {
@@ -600,7 +596,7 @@ void Calc_Ampl(int16_t deg)
         next_Cos_low = sin_signal[-900 + deg];
         next_Sin_high = sin_signal[1800 - deg];
         next_Cos_high = 0;
-    }    
+    }
     NewData = 1;
 }
 
@@ -723,15 +719,7 @@ void Timer2_IRQHandler(void)
         SinOutL = Sin_low;
         CosOutL = Cos_low;
     } else {
-        //			{
-        //					DAC2_SetData (Cos_low);
 
-        //				//	MDR_TIMER3->ARR = Sin_delay<<4; //half haperiod
-        //				  TIMER_Cmd(MDR_TIMER3,ENABLE);
-        //
-        //				//	MDR_TIMER2->ARR =  (period>>1)+13000 + (d_period); //half haperiod
-        //				 // TIMER_Cmd(MDR_TIMER2,ENABLE);
-        //			}
     }
 
     MDR_TIMER2->STATUS = 0;
@@ -811,13 +799,8 @@ void Timer1_IRQHandler(void)
                 TIMER_Cmd(MDR_TIMER1, DISABLE);
                 MDR_TIMER1->CNT = 0;
 
-                PORT_ResetBits(MDR_PORTC, PORT_Pin_4);
-                PORT_ResetBits(MDR_PORTC, PORT_Pin_5);
-                PORT_ResetBits(MDR_PORTC, PORT_Pin_6);
-
-                PORT_SetBits(MDR_PORTB, PORT_Pin_12);
-                PORT_ResetBits(MDR_PORTB, PORT_Pin_13);
-                PORT_ResetBits(MDR_PORTB, PORT_Pin_14);
+                relays_off();
+                led_red_only_on();
 
                 Mode = Single;
                 NVIC_DisableIRQ(Timer1_IRQn);
@@ -903,16 +886,6 @@ void Timer1_IRQHandler(void)
         } else {
             counter_ext++;
         }
-        // cnt11++;
-
-        //	temp_az=1;
-
-        //	NVIC_DisableIRQ(Timer1_IRQn);
-        //	MDR_TIMER3->STATUS=0;
-        //	MDR_TIMER3->CH1_CNTRL = 0x8000; //enable Chanel1 in capture mode
-        // MDR_TIMER3->IE = 0x00000020;
-        //	MDR_TIMER3->STATUS=0;
-        //	NVIC_EnableIRQ(Timer3_IRQn);// enable interrupt from imp sdviga
     }
     if (counter_ext2 == 2047) {
         counter_ext2 = 1;
