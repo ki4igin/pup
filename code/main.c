@@ -27,7 +27,7 @@
 // Zero_Ref - shift bitwin zeros VT-sensor and drive-sensor
 #define Sensor_Shift 450
 
-int16_t Zero_Ref = Sensor_Shift;
+int16_t Zero_Ref = 0;
 
 PORT_InitTypeDef PORT_InitStructure;
 TIMER_CntInitTypeDef sTIM_CntInit;
@@ -175,7 +175,7 @@ uint16_t d_period = 20832; // = 1,302 ms
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
-void Calc_Ampl(uint16_t next_angle);
+void Calc_Ampl(int16_t deg);
 void Timer1_Init(void);
 void Timer2_Init(void);
 void Timer3_Init(void);
@@ -450,13 +450,14 @@ void main(void)
                         TxMassivOffset[4] = RxMassiv[4];
                         TxMassivOffset[5] = TxMassivOffset[4] + TxMassivOffset[3] + TxMassivOffset[0];
                     } else if (RxMassiv[0] == 0x16) {
-                        Zero_Ref = Sensor_Shift + (RxMassiv[1] << 8) + RxMassiv[2];
-                        if (Zero_Ref > 3599) {
-                            Zero_Ref = Zero_Ref - 3600;
-                        }
-                        if (Zero_Ref < 0) {
-                            Zero_Ref = Zero_Ref + 3600;
-                        }
+                        // Zero_Ref = Sensor_Shift + (RxMassiv[1] << 8) + RxMassiv[2];
+                        Zero_Ref = (RxMassiv[1] << 8) + RxMassiv[2];
+                        // if (Zero_Ref > 3599) {
+                        //     Zero_Ref = Zero_Ref - 3600;
+                        // }
+                        // if (Zero_Ref < 0) {
+                        //     Zero_Ref = Zero_Ref + 3600;
+                        // }
                         Check_next_angle();
                     } else if (RxMassiv[0] == 0x8B) {
                         d_period = (RxMassiv[1] << 8) + RxMassiv[2];
@@ -570,59 +571,37 @@ void SysTick_Handler(void)
     flag_tx_ready = 1;
 }
 
-/*
-volatile uint16_t n_angle_calc;
-volatile uint16_t n_angle_calc2;
-volatile uint16_t n_angle_calc3;
-*/
-volatile int z;
-
-void Calc_Ampl(uint16_t next_angle_calc)
+void Calc_Ampl(int16_t deg)
 {
-    //	uint8_t count_error = 0;
-    // count_error = next_angle_calc/ ;
-    // next_angle_calc = next_angle_calc + system_error[]; ///////////// remove system error
-    //	n_angle_cnt3++;
-    //	n_angle_calc3 = next_angle_calc;
-    //	next_angle_calc = next_angle_calc ;//+ 7; ///////////// remove system error
-    if ((next_angle == 0) || (next_angle_calc == 1) || (next_angle_calc == 0)) {
-        z++;
+    deg = deg - 1350 + Zero_Ref;
+    if (deg > 1800) {
+        deg = deg - 3600;
+    } else if (deg <= -1800) {
+        deg = deg + 3600;
     }
 
-    if (next_angle_calc >= (3600 - Zero_Ref)) {
-        next_angle2 = 3600 - next_angle_calc;
-        next_angle2 = Zero_Ref - next_angle2;
+    if (deg < -900) {
+        next_Sin_low = sin_signal[1800 + deg];
+        next_Cos_low = sin_signal[-900 - deg];
         next_Sin_high = 0;
         next_Cos_high = 0;
-        next_Sin_low = sin_signal[next_angle2];
-        next_Cos_low = sin_signal[900 - next_angle2];
+    } else if (deg < 0) {
+        next_Sin_low = sin_signal[-deg];
+        next_Cos_low = 0;
+        next_Sin_high = 0;
+        next_Cos_high = sin_signal[900 + deg];
+    } else if (deg < 900) {
+        next_Sin_low = 0;
+        next_Cos_low = 0;
+        next_Sin_high = sin_signal[deg];
+        next_Cos_high = sin_signal[900 - deg];
     } else {
-        next_angle2 = next_angle_calc + Zero_Ref;
-        if (next_angle2 <= 900) {
-            next_Sin_high = 0;
-            next_Cos_high = 0;
-            next_Sin_low = sin_signal[next_angle2];
-            next_Cos_low = sin_signal[900 - next_angle2];
-        } else if (next_angle2 <= 1800) {
-            next_Sin_high = 0;
-            next_Cos_high = sin_signal[next_angle2 - 900];
-            next_Sin_low = sin_signal[1800 - next_angle2];
-            next_Cos_low = 0;
-        } else if (next_angle2 <= 2700) {
-            next_Sin_high = sin_signal[next_angle2 - 1800];
-            next_Cos_high = sin_signal[2700 - next_angle2];
-            next_Sin_low = 0;
-            next_Cos_low = 0;
-        } else {
-            next_Sin_high = sin_signal[3600 - next_angle2];
-            next_Cos_high = 0;
-            next_Sin_low = 0;
-            next_Cos_low = sin_signal[next_angle2 - 2700];
-        }
-    }
+        next_Sin_low = 0;
+        next_Cos_low = sin_signal[-900 + deg];
+        next_Sin_high = sin_signal[1800 - deg];
+        next_Cos_high = 0;
+    }    
     NewData = 1;
-    //	last_need_angle = new_need_angle;
-    //	new_need_angle = next_Sin_low;
 }
 
 void UART2_IRQHandler(void)
