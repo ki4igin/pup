@@ -466,8 +466,8 @@ void Calc_Ampl(int32_t deg, int32_t cor)
 
     uint32_t ind_cor_array = deg < 0 ? 3600 + deg : deg;
 
-    deg += cor + sensor_shift[pup] - cor_offset_amp[pup][ind_cor_array];
-    //		deg += cor + sensor_shift[pup];
+    deg += cor + sensor_shift[pup] + cor_offset_amp[pup][ind_cor_array];
+    // deg += cor + sensor_shift[pup];
     if (deg > 1800) {
         deg = deg - 3600;
     } else if (deg <= -1800) {
