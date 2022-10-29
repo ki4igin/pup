@@ -11,7 +11,6 @@
 #include "MDR32F9Qx_timer.h"
 // #include "MDR32F9Qx_it.h"
 #include "paralaks.h"
-#include "ParalaxCalc_fixpt.h"
 #include "leds.h"
 #include "rcc.h"
 #include "gpio.h"
@@ -20,8 +19,10 @@
 #include "timer.h"
 #include "sin_signal.h"
 #include "cor_offset_amp.h"
+#include "check_sum.h"
 
-int16_t Zero_Ref = 0;
+int16_t cor_oper = 0;
+int16_t cor_kama = 0;
 
 uint8_t ReciveByte = 0x00;
 
@@ -33,7 +34,8 @@ int16_t Sin_low = 4095;
 int16_t Cos_high = 71;
 int16_t Cos_low = 0;
 
-volatile int16_t next_angle = 460; //// ???? =913  ???
+int16_t current_deg_oper = 460;
+int16_t current_deg_kama = 0;
 volatile int16_t last_angle = 0;
 volatile int16_t next_angle2 = 0;
 volatile int16_t next_angle_mode = 0;
@@ -49,18 +51,29 @@ uint16_t Sin_delay = 0;
 uint8_t NewData = 0;
 
 uint16_t period = 0;
-uint32_t period_mcs = 0;
+uint32_t period_us = 0;
 
 /* Variables for UART ---------------------------------------------------------*/
-#define RX_BUFFER_SIZE 6
-uint8_t RxMassiv[RX_BUFFER_SIZE];
-volatile uint8_t RxCnt = 0;
+#define RX_OPER_SIZE 6
+#define TX_OPER_SIZE 6
+#define RX_KAMA_SIZE 26
+
+struct rx_buf {
+    uint32_t cnt;
+    uint8_t data[];
+};
+
+struct rx_buf rx_buf_oper = {
+    .cnt = 0,
+    .data = {[0 ... RX_OPER_SIZE - 1] = 0}};
+
+struct rx_buf rx_buf_kama = {
+    .cnt = 0,
+    .data = {[0 ... RX_KAMA_SIZE - 1] = 0}};
+
 uint8_t flag_rx_ready = 0;
 uint8_t flag_tx_ready = 0;
 uint8_t flag_rx_cu = 0;
-uint8_t ParseEnable = 0;
-uint8_t RxEnable = 0;
-uint16_t Sum = 0;
 
 uint8_t flag_zapit = 0;
 uint8_t flag_not_zapit = 0;
@@ -68,60 +81,7 @@ uint8_t cnt_systick = 0;
 
 uint16_t New_offset = 0;
 
-volatile uint8_t RxCnt1 = 0;
-
-uint8_t RxEnable1 = 0;
-uint8_t RxMassiv1[26];
-
-uint8_t ReciveByte1 = 0x00;
-
-uint8_t TxMassivSingle[6] = {0x11, 0x00, 0x00, 0x00, 0x00, 0x11};
-uint8_t TxMassivComplex[6] = {0x11, 0x00, 0x00, 0x00, 0x01, 0x12};
-uint8_t TxMassivComplexKama[6] = {0x11, 0x00, 0x00, 0x00, 0x02, 0x13};
-uint8_t TxMassivOffset[6] = {0x13, 0x00, 0x00, 0x30, 0xD4, 0x17};
-
-uint8_t TxMassivNoZap[6] = {0x14, 0x00, 0x00, 0x00, 0x01, 0x15};
-uint8_t TxMassivSmallZap[6] = {0x15, 0x00, 0x00, 0x00, 0x00, 0x15};
-
 uint8_t i;
-
-/* Variables for Parallaks ---------------------------------------------------------*/
-
-uint8_t Angle_In_Mode = 0; // if = 1 - Parallaks Mode
-uint32_t b_first = 31;     // = 37m
-uint32_t um_otn = 10;      // = 3grad
-uint32_t az_otn = 1600;    // = 70grad
-
-uint32_t R_first = 0;  // = 3km
-uint32_t um_first = 0; // = 40grad
-uint32_t az_first = 0; // = 15grad
-
-uint32_t dif = 0;
-
-uint32_t OD = 0;
-uint32_t AD2 = 0;
-uint32_t AD2_2 = 0;
-uint32_t AO = 0;
-uint32_t AD = 0;
-
-uint32_t CD = 0;
-
-uint32_t CAD = 0;
-uint32_t OAD = 0;
-
-uint32_t AC2 = 0;
-uint32_t AC = 0;
-
-uint32_t sin_CAD = 0;
-uint32_t sin_OAD = 0;
-uint8_t flag_equally = 0;
-uint16_t index1 = 0;
-uint16_t plus = 0;
-
-uint32_t S = 0;
-uint32_t a = 0;
-uint32_t b = 0;
-uint32_t e = 0;
 
 /*--------------------------------------------------------------*/
 
@@ -135,17 +95,16 @@ typedef enum {
 
 Angle_Out_Mode_TypeDef Angle_Out_Mode = None;
 
-typedef enum {
-    Single = 0,
-    Complex = 1,
-    Complex_Kama = 2
-} ModeState;
+enum mode {
+    MODE_OFF = 0,
+    MODE_OPER = 1,
+    MODE_KAMA = 2
+} mode = MODE_OFF;
 
-#define IS_MODE_STATE(STATE) (((STATE) == Single) || ((STATE) == Complex) || ((STATE) == Complex_Kama))
+#define IS_MODE_STATE(STATE) (((STATE) == MODE_OFF) || ((STATE) == MODE_OPER) || ((STATE) == MODE_KAMA))
 
 uint8_t Pre_Complex = 0;
 uint8_t Pre_Complex_Kama = 0;
-ModeState Mode = Single;
 
 uint8_t count_mode_angle = 0;
 uint32_t counter_ext = 0;
@@ -164,33 +123,48 @@ uint16_t d_period = 20832; // = 1,302 ms
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
-void Calc_Ampl(int16_t deg);
+void Calc_Ampl(int32_t deg, int32_t cor);
 void Timer1_Init(void);
 void Timer2_Init(void);
 void Timer3_Init(void);
-void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20]);
 void Parallaks(void);
-void Check_next_angle(void);
 
-static enum cmd {
+enum cmd {
     CMD_MODE = 0x1,
     CMD_DEG = 0x2,
     CMD_SHIFT = 0x3,
-    CMD_COR_OPERATOR = 0x6,
+    CMD_NO_ZAP = 0x4,
+    CMD_ZAP_SMALL = 0x5,
+    CMD_COR_OPER = 0x6,
     CMD_COR_KAMA = 0x7,
     CMD_VER = 0xF,
-} cmd;
+};
 
 static enum pup {
     PUP_AZ = 0,
     PUP_EL = 1
 } pup;
 
+const uint8_t pup_id[] = {
+    [PUP_AZ] = 0x1,
+    [PUP_EL] = 0x2,
+};
+
 static uint32_t cnt_rx_kama = 0;
 
-static uint8_t get_cmd_id(enum pup p, enum cmd c)
+// static uint8_t get_cmd_id(enum pup p, enum cmd c)
+//{
+//     uint8_t id = ((p + 1) << 4) | (c & 0xF);
+//     return id;
+// }
+
+static void send_cmd(enum cmd cmd, uint32_t arg)
 {
-    uint8_t id = ((p + 1) << 4) | (c && 0xF);
+    uint8_t tx_buf[TX_OPER_SIZE] = {0};
+    tx_buf[0] = (pup_id[pup] << 4) | cmd;
+    *(uint32_t *)&tx_buf[1] = __REV(arg);
+    tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
+    uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
 }
 
 static uint32_t isvalid_kama_data(SphCoord_t coord)
@@ -249,7 +223,7 @@ void main(void)
     dac_all_init();
 
     /* Init Angle as 46 grad */ //// ??????????????
-    Calc_Ampl(460);
+    Calc_Ampl(460, 0);
 
     /* Set PIN SHDN of RS232 */
     PORT_SetBits(MDR_PORTB, PORT_Pin_11);
@@ -257,8 +231,6 @@ void main(void)
     /* Init System Timer */
     SysTick->LOAD = 0xFFFFFF; // 0.2s
     SysTick->CTRL = 0x7;
-
-    static int32_t OAD_TEMP;
 
     // ParalaxCalc_fixpt_initialize();
     ParalaksInit();
@@ -273,56 +245,35 @@ void main(void)
 
             counter_ext = 0;
             counter_ext2 = 0;
-            Mode = Single;
+            mode = MODE_OFF;
             NVIC_DisableIRQ(Timer1_IRQn); //
             TIMER_Cmd(MDR_TIMER3, DISABLE);
             MDR_TIMER3->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, DISABLE);
             MDR_TIMER1->CNT = 0;
 
-            i = 0;
-            while (i < 6) {
-                while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                }
-                UART_SendData(MDR_UART2, TxMassivNoZap[i]);
-                i++;
-            }
+            send_cmd(CMD_NO_ZAP, 1);
         }
 
-        if (flag_rx_cu == 1) // if recieve celeukazaniya
+        if (flag_rx_cu) // if recieve celeukazaniya
         {
-            /////
-
-            // parallaks
-
-            // PORT_SetBits(MDR_PORTB, PORT_Pin_15);
-
-            CheckSumPacket(26, RxMassiv1);
             flag_rx_cu = 0;
-            if (ParseEnable == 1) {
-                ParseEnable = 0;
 
-                az_first = (RxMassiv1[13] >> 2);
-                az_first = az_first + (RxMassiv1[12] << 5);
-                az_first = az_first + ((RxMassiv1[11] & 0x07) << 12); // = 15grad
+            if (is_valid_checksum_kama((uint8_t *)&rx_buf_kama.data, RX_KAMA_SIZE)) {
+                uint8_t *data = (uint8_t *)&rx_buf_kama.data;
+
+                uint32_t az_first = (data[13] >> 2);
+                az_first = az_first + (data[12] << 5);
+                az_first = az_first + ((data[11] & 0x07) << 12); // = 15grad
                 //////////////////////////////////
                 //			az_first = (az_first*225)>>11;
                 ///////////////////////////////////
 
-                if ((RxMassiv1[18] & 0x40) == 0) {
-                    um_first = (RxMassiv1[20] >> 2) + (RxMassiv1[19] << 5) + ((RxMassiv1[18] & 0x0F) << 12); // = 40grad
-                    //////////////////////////////////
-                    //		um_first = (um_first*225)>>11;
-                    ///////////////////////////////////
-                } else {
-                    um_first = (RxMassiv1[20] >> 2) + (RxMassiv1[19] << 5) + ((RxMassiv1[18] & 0x0F) << 12); // = 40grad
-                    //////////////////////////////////
-                    //			um_first = (um_first*225)>>11;
-                    ///////////////////////////////////
-
+                int32_t um_first = (data[20] >> 2) + (data[19] << 5) + ((data[18] & 0x0F) << 12);
+                if (data[18] & 0x40) {
                     um_first = 0 - um_first;
                 }
-                R_first = (RxMassiv1[17]) + (RxMassiv1[16] << 7) + (RxMassiv1[15] << 14) + (RxMassiv1[14] >> 21); // = 3km
+                uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] >> 21); // = 3km
 
                 N_Coord_Kama.az = az_first;
                 N_Coord_Kama.el = um_first;
@@ -334,45 +285,37 @@ void main(void)
                 }
 
                 ParalaksCalc(&N_Coord_Kama, &N_Coord_MRL);
-                //				az_first = (RxMassiv1[1]<<8) + RxMassiv1[2]; // = 15grad
-                //				um_first = (RxMassiv1[3]<<8) + RxMassiv1[4]; // = 40grad
-                //				R_first = (RxMassiv1[5]<<24) + (RxMassiv1[6]<<16) + (RxMassiv1[7]<<8) + RxMassiv1[8]; // = 3km
 
-                //				CBE = N_Coord_MRL.el;
-                OAD = N_Coord_MRL.az;
-                //				BC = N_Coord_MRL.r;
+                int32_t deg_temp = 0;
 
-                // need translate to degrees & meters
-
-                // WTF ???????????
-                // OAD_TEMP = ((OAD*3600) >> 15) - 75;
-                // WTF ???????????
-                OAD_TEMP = ((OAD * 3600) >> 15);
-                if (OAD_TEMP < 0) {
-                    OAD_TEMP += 3600;
+                if (pup == PUP_AZ) {
+                    deg_temp = N_Coord_MRL.az;
+                } else {
+                    deg_temp = N_Coord_MRL.el;
                 }
-                OAD = OAD_TEMP;
-                //				((OAD*3600) >> 15) - 75;
 
-                //				CBE = (CBE*3600) >> 15;
-                Parallaks();
+                deg_temp = ((deg_temp * 3600) >> 15);
+
+                current_deg_kama = deg_temp;
+                Calc_Ampl(deg_temp, cor_kama);
             }
             /////
         } else {
             if (flag_rx_ready == 1) {
                 flag_rx_ready = 0;
 
-                CheckSumPacket(6, RxMassiv);
-                if (ParseEnable == 1) {
-                    ParseEnable = 0;
-                    if (RxMassiv[0] == 0x11) {
-                        switch (RxMassiv[4]) {
-                        case 0x00:
+                uint8_t *rx_data = (uint8_t *)rx_buf_oper.data;
+
+                if (is_valid_checksum_oper(rx_data, RX_OPER_SIZE)) {
+                    uint8_t cmd = rx_data[0] & 0xF;
+                    if (cmd == CMD_MODE) {
+                        switch (rx_data[4]) {
+                        case MODE_OFF:
                             relays_off();
                             led_red_only_on();
                             counter_ext = 0;
                             counter_ext2 = 0;
-                            Mode = Single;
+                            mode = MODE_OFF;
                             NVIC_DisableIRQ(Timer1_IRQn); // enable interrupt Timer1
                             TIMER_Cmd(MDR_TIMER1, DISABLE);
                             MDR_TIMER1->CNT = 0;
@@ -380,18 +323,18 @@ void main(void)
                             MDR_TIMER3->CNT = 0;
                             NVIC_DisableIRQ(UART1_IRQn);
                             break;
-                        case 0x01: // angle from operdtor
+                        case MODE_OPER:
                             flag_not_zapit = 0;
                             flag_zapit = 0;
                             cnt_systick = 0;
                             relays_on();
                             led_yellow_only_on();
 
-                            // Mode = Complex;
-                            if (Mode == Single) {
+                            // Mode = MODE_OPER;
+                            if (mode == MODE_OFF) {
                                 Pre_Complex = 1;
                             } else {
-                                Mode = Complex;
+                                mode = MODE_OPER;
                             }
                             counter_ext = 0;
                             count_error_ext = 0;
@@ -399,98 +342,64 @@ void main(void)
                             NVIC_DisableIRQ(UART1_IRQn);
                             break;
 
-                        case 0x02: // angle from KAMA
+                        case MODE_KAMA: // angle from KAMA
                             flag_not_zapit = 0;
                             flag_zapit = 0;
                             cnt_systick = 0;
                             relays_on();
                             led_green_only_on();
 
-                            if (Mode == Single) {
+                            if (mode == MODE_OFF) {
                                 Pre_Complex_Kama = 1;
                             } else {
-                                Mode = Complex_Kama;
+                                mode = MODE_KAMA;
                             }
-                            // Mode = Complex_Kama;
+                            // Mode = MODE_KAMA;
                             counter_ext = 0;
                             count_error_ext = 0;
                             counter_ext2 = 0;
-
-                            Angle_In_Mode = 1; // Parallacs mode
                             cnt_rx_kama = 0;
                             NVIC_EnableIRQ(UART1_IRQn);
 
                             break;
                         }
-                    } else if (RxMassiv[0] == 0x12) {
-                        /////////////////////////////////////////////////////////////
-
-                        if (Mode == Complex_Kama) {
+                    } else if (cmd == CMD_DEG) {
+                        if (mode == MODE_KAMA) {
                         } else {
-                            // ParseEnable = 0;
-                            last_angle = next_angle;
-                            next_angle_mode = last_angle;
-                            // next_angle = 0;
-                            next_angle = (RxMassiv[3] << 8) + RxMassiv[4];
-                            //						n_angle = next_angle;
-
-                            Check_next_angle();
+                            current_deg_oper = (rx_data[3] << 8) + rx_data[4];
+                            Calc_Ampl(current_deg_oper, cor_oper);
                         }
-                    } else if (RxMassiv[0] == 0x13) {
+                    } else if (cmd == CMD_SHIFT) {
                         //	flag_offset = 1 ;
-                        New_offset = (RxMassiv[3] << 8) + RxMassiv[4] + 1;
-                        TxMassivOffset[3] = RxMassiv[3];
-                        TxMassivOffset[4] = RxMassiv[4];
-                        TxMassivOffset[5] = TxMassivOffset[4] + TxMassivOffset[3] + TxMassivOffset[0];
-                    } else if (RxMassiv[0] == 0x16) {
-                        // Zero_Ref = Sensor_Shift + (RxMassiv[1] << 8) + RxMassiv[2];
-                        Zero_Ref = (RxMassiv[1] << 8) + RxMassiv[2];
-
-                        Check_next_angle();
-                    } else if (RxMassiv[0] == 0x8B) {
-                        d_period = (RxMassiv[1] << 8) + RxMassiv[2];
+                        New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
+                    } else if (cmd == CMD_COR_OPER) {
+                        cor_oper = (rx_data[1] << 8) + rx_data[2];
+                        Calc_Ampl(current_deg_oper, cor_oper);
+                    } else if (cmd == CMD_COR_KAMA) {
+                        cor_oper = (rx_data[1] << 8) + rx_data[2];
+                        Calc_Ampl(current_deg_kama, cor_kama);
                     }
-
+                    // WTF ????????????????????????????????????????????????????
+                    else if (cmd == 0x8B) {
+                        d_period = (rx_data[1] << 8) + rx_data[2];
+                    }
+                    // ???????????????????????????????????????????????????????
                 }
             }
             if (flag_tx_ready == 1) {
                 flag_tx_ready = 0;
                 count_tx++;
                 if (count_tx == 1) {
-                    i = 0;
-                    while (i < 6) {
-                        while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                        }
-                        UART_SendData(MDR_UART2, TxMassivOffset[i]);
-                        i++;
-                    }
+                    send_cmd(CMD_SHIFT, New_offset);
+                    // uart_send_buf(MDR_UART2, TxMassivOffset, TX_OPER_SIZE);
                 } else {
                     count_tx = 0;
-                    if (Mode == Single) {
-                        i = 0;
-                        while (i < 6) {
-                            while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                            }
-                            UART_SendData(MDR_UART2, TxMassivSingle[i]);
-                            i++;
-                        }
-                    } else if (Mode == Complex) {
-                        i = 0;
-                        while (i < 6) {
-                            while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                            }
-                            UART_SendData(MDR_UART2, TxMassivComplex[i]);
-                            i++;
-                        }
-                    } else {
-                        i = 0;
-                        while (i < 6) {
-                            while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                            }
-                            UART_SendData(MDR_UART2, TxMassivComplexKama[i]);
-                            i++;
-                        }
-                    }
+                    send_cmd(CMD_MODE, mode);
+                    // uint8_t tx_buf[TX_OPER_SIZE] = {0};
+                    // tx_buf[0] = (pup_id[pup] << 4) | CMD_MODE;
+                    // tx_buf[4] = mode;
+                    // tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
+                    // uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
                 }
             }
         }
@@ -505,13 +414,13 @@ void SysTick_Handler(void)
         {
             Pre_Complex = 0;
             cnt_systick = 0;
-            Mode = Complex;
+            mode = MODE_OPER;
             MDR_TIMER1->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, ENABLE);
             NVIC_EnableIRQ(Timer1_IRQn); // enable interrupt Timer1
         }
     }
-    if (Mode == Complex) {
+    if (mode == MODE_OPER) {
         if (flag_zapit == 0) {
             cnt_systick++;
             if (cnt_systick == 2) {
@@ -526,13 +435,13 @@ void SysTick_Handler(void)
         {
             Pre_Complex_Kama = 0;
             cnt_systick = 0;
-            Mode = Complex_Kama;
+            mode = MODE_KAMA;
             MDR_TIMER1->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, ENABLE);
             NVIC_EnableIRQ(Timer1_IRQn); // enable interrupt Timer1
         }
     }
-    if (Mode == Complex_Kama) {
+    if (mode == MODE_KAMA) {
         if (flag_zapit == 0) {
             cnt_systick++;
             if (cnt_systick == 2) {
@@ -545,14 +454,17 @@ void SysTick_Handler(void)
     flag_tx_ready = 1;
 }
 
-void Calc_Ampl(int16_t deg)
+void Calc_Ampl(int32_t deg, int32_t cor)
 {
     // shift bitwin zeros VT-sensor and drive-sensor
     const int32_t sensor_shift[] = {
         [PUP_AZ] = -1350,
         [PUP_EL] = 0};
 
-    deg = deg + Zero_Ref + sensor_shift[pup] + cor_offset_amp[deg][pup];
+    uint32_t ind_cor_array = deg < 0 ? 3600 + deg : deg;
+
+    deg += cor + sensor_shift[pup] - cor_offset_amp[pup][ind_cor_array];
+//		deg += cor + sensor_shift[pup];
     if (deg > 1800) {
         deg = deg - 3600;
     } else if (deg <= -1800) {
@@ -586,26 +498,19 @@ void Calc_Ampl(int16_t deg)
 void UART2_IRQHandler(void)
 {
     if (UART_GetFlagStatus(MDR_UART2, UART_FLAG_RXFF) == SET) {
-        ReciveByte = (uint8_t)UART_ReceiveData(MDR_UART2);
-        if (RxEnable == 0) {
-            if (ReciveByte == 0x11 | ReciveByte == 0x12 | ReciveByte == 0x13 | ReciveByte == 0x16) {
-                RxEnable = 1;
-                RxCnt = 0;
-                RxMassiv[RxCnt] = ReciveByte;
-                RxCnt++;
+        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART2);
+
+        if (rx_buf_oper.cnt == 0) {
+            if (((rx_byte >> 4) != pup_id[pup])) {
+                return;
             }
-        } else {
-            RxMassiv[RxCnt] = ReciveByte;
-            RxCnt++;
-            if (RxCnt == 6) {
-                RxEnable = 0;
-                flag_rx_ready = 1;
-                //				if (RxMassiv[0] == 0x12)
-                //				{
-                //					PORT_SetBits(MDR_PORTB, PORT_Pin_13);
-                //					//flag_new_next = 1;
-                //				}
-            }
+        }
+
+        rx_buf_oper.data[rx_buf_oper.cnt++] = rx_byte;
+
+        if (rx_buf_oper.cnt == RX_OPER_SIZE) {
+            rx_buf_oper.cnt = 0;
+            flag_rx_ready = 1;
         }
     }
 }
@@ -613,78 +518,39 @@ void UART2_IRQHandler(void)
 void UART1_IRQHandler(void)
 {
     if (UART_GetFlagStatus(MDR_UART1, UART_FLAG_RXFF) == SET) {
-        ReciveByte1 = (uint8_t)UART_ReceiveData(MDR_UART1);
-        if (RxEnable1 == 0) {
-            if (ReciveByte1 == 0xEB) {
-                RxEnable1 = 1;
-                RxCnt1 = 0;
-                RxMassiv1[RxCnt1] = ReciveByte1;
-                RxCnt1++;
-            }
-        } else {
-            if (RxCnt1 == 25) {
-                RxMassiv1[RxCnt1] = ReciveByte1;
-                RxCnt1++;
-                flag_rx_cu = 1;
+        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART1);
 
-                RxEnable1 = 0;
-            } else {
-                if ((ReciveByte1 & 0x80) == 0) {
-                    RxMassiv1[RxCnt1] = ReciveByte1;
-                    RxCnt1++;
-                } else {
-                    RxMassiv1[RxCnt1] = ReciveByte1;
-                    RxCnt1++;
-                    if (RxCnt1 == 24) {
-                        if (RxMassiv1[24] != 0x9C) {
-                            RxEnable1 = 0;
-                        }
-                    }
-                    //				RxEnable1 = 0;
-                }
-            }
+        if (rx_byte == 0xEB) {
+            rx_buf_kama.cnt = 0;
+        }
+
+        rx_buf_kama.data[rx_buf_kama.cnt++] = rx_byte;
+
+        if ((rx_buf_kama.cnt == (RX_KAMA_SIZE - 1)) && rx_byte != 0x9C) {
+            rx_buf_kama.cnt = 0;
+        }
+
+        if (rx_buf_kama.cnt == RX_KAMA_SIZE) {
+            flag_rx_cu = 1;
         }
     }
 }
 
-void Parallaks(void)
-{
-    last_angle = next_angle;
-    next_angle_mode = last_angle;
-    // next_angle = 0;
-    next_angle = OAD;
+// void Parallaks(void)
+// {
+//     last_angle = current_deg_oper;
+//     next_angle_mode = last_angle;
+//     // current_deg_oper = 0;
+//     current_deg_oper = OAD;
 
-    Check_next_angle();
-    // MDR_PORTB->RXTX = 0x00;
-}
+//     Check_next_angle();
+//     // MDR_PORTB->RXTX = 0x00;
+// }
 
-void Check_next_angle()
-{
-    Calc_Ampl(next_angle);
-}
-
-void CheckSumPacket(uint8_t count_massiv, uint8_t Massiv[20])
-{
-    Sum = 0;
-    uint8_t i = 0;
-    count_massiv = count_massiv - 1;
-    while (i < count_massiv) {
-        Sum += Massiv[i];
-        i++;
-    }
-    // Sum = Sum + 0xEB;
-    if (flag_rx_cu == 1) {
-        while (Sum > 0xFF) {
-            Sum = ((Sum & 0xFF00) >> 8) + (Sum & 0x00FF);
-        }
-        // Sum = Sum & 0x7F;
-    }
-
-    if ((Sum & 0x00FF) == Massiv[count_massiv]) {
-        ParseEnable = 1;
-    }
-    //	ParseEnable = 1;
-}
+// void Check_next_angle()
+// {
+//     Calc_Ampl(current_deg_oper);
+// }
 
 volatile unsigned int SinOutL;
 volatile unsigned int CosOutL;
@@ -718,9 +584,9 @@ void Timer1_IRQHandler(void)
         MDR_TIMER1->CNT = 0;
         Period_Massiv[counter_ext2] = period;
 
-        period_mcs = period >> 1;
+        period_us = period >> 1;
 
-        if ((period_mcs > 2400) && (period_mcs < 2800)) // period < 2.2 ms - sin_signala zapitki net :)
+        if ((period_us > 2400) && (period_us < 2800)) // period < 2.2 ms - sin_signala zapitki net :)
         {
             count_error_ext = 0;
             if (NewData == 1) {
@@ -744,33 +610,33 @@ void Timer1_IRQHandler(void)
                 }
                 // TIMER_Cmd(MDR_TIMER2,ENABLE);
             }
-            if (Angle_Out_Mode != None) {
-                count_mode_angle++;
-                if (count_mode_angle == 2) {
-                    count_mode_angle = 0;
-                    if (Angle_Out_Mode == Up) {
-                        next_angle_mode++;
-                        if (next_angle_mode == next_angle) {
-                            Angle_Out_Mode = None;
-                        } else if (next_angle_mode == 3600) {
-                            next_angle_mode = 0;
-                        }
-                    }
-                    if (Angle_Out_Mode == Down) {
-                        next_angle_mode--;
-                        if (next_angle_mode == next_angle) {
-                            Angle_Out_Mode = None;
-                        }
+            // if (Angle_Out_Mode != None) {
+            //     count_mode_angle++;
+            //     if (count_mode_angle == 2) {
+            //         count_mode_angle = 0;
+            //         if (Angle_Out_Mode == Up) {
+            //             next_angle_mode++;
+            //             if (next_angle_mode == current_deg_oper) {
+            //                 Angle_Out_Mode = None;
+            //             } else if (next_angle_mode == 3600) {
+            //                 next_angle_mode = 0;
+            //             }
+            //         }
+            //         if (Angle_Out_Mode == Down) {
+            //             next_angle_mode--;
+            //             if (next_angle_mode == current_deg_oper) {
+            //                 Angle_Out_Mode = None;
+            //             }
 
-                        else if (next_angle_mode == 0) {
-                            next_angle_mode = 3600;
-                        }
-                    }
-                    //				  n_angle_cnt2++;
-                    //				  n_angle_calc2 = next_angle_mode;
-                    Calc_Ampl(next_angle_mode);
-                }
-            }
+            //             else if (next_angle_mode == 0) {
+            //                 next_angle_mode = 3600;
+            //             }
+            //         }
+            //         //				  n_angle_cnt2++;
+            //         //				  n_angle_calc2 = next_angle_mode;
+            //         Calc_Ampl(next_angle_mode);
+            //     }
+            // }
         } else // period < 2.2 ms - sin_signala zapitki net
         {
             count_error_ext++;
@@ -784,26 +650,12 @@ void Timer1_IRQHandler(void)
                 relays_off();
                 led_red_only_on();
 
-                Mode = Single;
+                mode = MODE_OFF;
                 NVIC_DisableIRQ(Timer1_IRQn);
                 //	NVIC_DisableIRQ(EXT_INT1_IRQn);
                 TIMER_Cmd(MDR_TIMER3, DISABLE);
                 MDR_TIMER3->CNT = 0;
-
-                TxMassivSmallZap[2] = counter_ext;
-                TxMassivSmallZap[1] = (counter_ext >> 8);
-                // period_mcs = (period>>1);
-                TxMassivSmallZap[4] = period_mcs;
-                TxMassivSmallZap[3] = (period_mcs >> 8);
-                TxMassivSmallZap[5] = TxMassivSmallZap[0] + TxMassivSmallZap[2] + TxMassivSmallZap[1] + TxMassivSmallZap[3] + TxMassivSmallZap[4];
-
-                i = 0;
-                while (i < 6) {
-                    while (UART_GetFlagStatus(MDR_UART2, UART_FLAG_TXFE) == RESET) {
-                    }
-                    UART_SendData(MDR_UART2, TxMassivSmallZap[i]);
-                    i++;
-                }
+                send_cmd(CMD_NO_ZAP, period_us);
                 counter_ext = 0;
             } else {
                 // count_error_ext = 0;
@@ -820,44 +672,7 @@ void Timer1_IRQHandler(void)
                     MDR_TIMER3->STATUS = 0;
                     //	NVIC_EnableIRQ(Timer3_IRQn);
                     TIMER_Cmd(MDR_TIMER3, ENABLE);
-
-                    //		MDR_TIMER1->CNT=0;
-                    //		MDR_TIMER1->STATUS=0;
-                    //		TIMER_Cmd(MDR_TIMER1,ENABLE);//Count of enable ext_int
-                    ////
-                    ////					  DAC1_SetData (Sin_high);
-                    ////		  DAC2_SetData (Cos_high);
-                    //
                     if (counter_ext > 0) {
-                        // MDR_TIMER2->ARR =  (period>>1)+13000 + (d_period); //half haperiod
-                    }
-                    // TIMER_Cmd(MDR_TIMER2,ENABLE);
-                }
-
-                //////////////////////////////
-                // Angle_Out_Mode = 1
-                if (Angle_Out_Mode != None) {
-                    count_mode_angle++;
-                    if (count_mode_angle == 2) {
-                        count_mode_angle = 0;
-                        if (Angle_Out_Mode == Up) {
-                            next_angle_mode++;
-                            if (next_angle_mode == next_angle) {
-                                Angle_Out_Mode = None;
-                            } else if (next_angle_mode == 3600) {
-                                next_angle_mode = 0;
-                            }
-                        }
-                        if (Angle_Out_Mode == Down) {
-                            next_angle_mode--;
-                            if (next_angle_mode == next_angle) {
-                                Angle_Out_Mode = None;
-                            } else if (next_angle_mode == 0) {
-                                next_angle_mode = 3600;
-                            }
-                        }
-
-                        Calc_Ampl(next_angle_mode);
                     }
                 }
             }

@@ -44,3 +44,14 @@ void uart2_init(void)
 
     NVIC_EnableIRQ(UART2_IRQn);
 }
+
+void uart_send_buf(MDR_UART_TypeDef *uart, uint8_t *buf, uint8_t size)
+{
+    uint32_t i = 0;
+    for (i = 0; i < size; i++) {
+        while (UART_GetFlagStatus(uart, UART_FLAG_TXFE) == RESET) {
+            ;
+        }
+        UART_SendData(uart, buf[i]);
+    }
+}
