@@ -45,7 +45,7 @@ void uart2_init(void)
     NVIC_EnableIRQ(UART2_IRQn);
 }
 
-void uart_send_buf(MDR_UART_TypeDef *uart, uint8_t *buf, uint8_t size)
+void uart_send_buf(MDR_UART_TypeDef *uart, uint8_t *buf, uint32_t size)
 {
     uint32_t i = 0;
     for (i = 0; i < size; i++) {
@@ -54,4 +54,29 @@ void uart_send_buf(MDR_UART_TypeDef *uart, uint8_t *buf, uint8_t size)
         }
         UART_SendData(uart, buf[i]);
     }
+}
+
+/* Init System Timer */
+// SysTick->LOAD = 0xFFFFFF; // 0.2s
+// SysTick->CTRL = 0x7;
+uint32_t uart_receive_buf(MDR_UART_TypeDef *uart, uint8_t *buf, uint32_t size,
+                          uint32_t timeout)
+{
+    int32_t start_cnt = SysTick->VAL;
+    uint32_t time_ms = 0;
+    uint32_t i = 0;
+    for (i = 0; i < size; i++) {
+        while (UART_GetFlagStatus(uart, UART_FLAG_RXFF) == RESET) {
+            int32_t delta_cnt = start_cnt - SysTick->VAL;
+            if (delta_cnt < 0) {
+                delta_cnt += SysTick->LOAD;
+            }
+            time_ms = delta_cnt / 80000;
+            if (time_ms > timeout) {
+                return 0;
+            }
+        }
+        *buf++ = (uint8_t)UART_ReceiveData(uart);
+    }
+		return 1;
 }

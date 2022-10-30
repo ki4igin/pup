@@ -58,6 +58,7 @@ uint32_t period_us = 0;
 #define RX_OPER_SIZE 6
 #define TX_OPER_SIZE 6
 #define RX_KAMA_SIZE 26
+#define RX_BUF_COR   1801
 
 struct rx_buf {
     uint32_t cnt;
@@ -71,6 +72,10 @@ struct rx_buf rx_buf_oper = {
 struct rx_buf rx_buf_kama = {
     .cnt = 0,
     .data = {[0 ... RX_KAMA_SIZE - 1] = 0}};
+
+uint8_t rx_buf_cor[RX_BUF_COR] = {0};
+int16_t cor_array[3600];
+uint32_t flag_cor_array_en = {0};
 
 uint8_t flag_rx_ready = 0;
 uint8_t flag_tx_ready = 0;
@@ -138,6 +143,7 @@ enum cmd {
     CMD_ZAP_SMALL = 0x5,
     CMD_COR_OPER = 0x6,
     CMD_COR_KAMA = 0x7,
+    CMD_COR_ARRAY_KAMA = 0x8,
     CMD_VER = 0xF,
 };
 
@@ -158,7 +164,6 @@ static uint32_t cnt_rx_kama = 0;
 //     uint8_t id = ((p + 1) << 4) | (c & 0xF);
 //     return id;
 // }
-
 static void send_cmd(enum cmd cmd, uint32_t arg)
 {
     uint8_t tx_buf[TX_OPER_SIZE] = {0};
@@ -166,6 +171,32 @@ static void send_cmd(enum cmd cmd, uint32_t arg)
     *(uint32_t *)&tx_buf[1] = __REV(arg);
     tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
     uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
+}
+
+static void cmd_cor_array_proc(uint32_t arg)
+{
+    if (arg <= 4) {
+        NVIC_DisableIRQ(UART2_IRQn);
+        if (uart_receive_buf(MDR_UART2, rx_buf_cor, RX_BUF_COR, 40)) {
+            if (is_valid_checksum_oper(rx_buf_cor, RX_BUF_COR)) {
+                uint32_t i;
+                uint32_t j;
+                for (i = 0, j = arg * 900; i < (RX_BUF_COR - 1); i = +2, j++) {
+                    cor_array[j] = (int16_t)(__REV16(*(uint16_t*)&rx_buf_cor[i]));
+                }
+                send_cmd(CMD_COR_ARRAY_KAMA, arg);
+            }
+        }
+        NVIC_EnableIRQ(UART2_IRQn);
+    }
+    if (arg == 10) {
+        flag_cor_array_en = 0;
+        send_cmd(CMD_COR_ARRAY_KAMA, arg);
+    }
+    if (arg == 11) {
+        flag_cor_array_en = 1;
+        send_cmd(CMD_COR_ARRAY_KAMA, arg);
+    }
 }
 
 static uint32_t isvalid_kama_data(SphCoord_t coord)
@@ -309,6 +340,7 @@ void main(void)
 
                 if (is_valid_checksum_oper(rx_data, RX_OPER_SIZE)) {
                     uint8_t cmd = rx_data[0] & 0xF;
+                    uint32_t arg = __REV(*(uint32_t*)&rx_data[1]);
                     if (cmd == CMD_MODE) {
                         switch (rx_data[4]) {
                         case MODE_OFF:
@@ -379,6 +411,8 @@ void main(void)
                     } else if (cmd == CMD_COR_KAMA) {
                         cor_oper = (rx_data[1] << 8) + rx_data[2];
                         Calc_Ampl(current_deg_kama, cor_kama);
+                    } else if (cmd == CMD_COR_ARRAY_KAMA) {
+                        cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {
                         send_cmd(CMD_VER, VERSION);
                     }
@@ -465,6 +499,10 @@ void Calc_Ampl(int32_t deg, int32_t cor)
         [PUP_EL] = 0};
 
     uint32_t ind_cor_array = deg < 0 ? 3600 + deg : deg;
+
+    if (flag_cor_array_en) {
+        deg += cor_array[ind_cor_array];
+    }
 
     deg += cor + sensor_shift[pup] + cor_offset_amp[pup][ind_cor_array];
     // deg += cor + sensor_shift[pup];
