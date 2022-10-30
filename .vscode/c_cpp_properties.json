@@ -11,7 +11,7 @@
                 "DEBUG"
             ],
             "cStandard": "gnu17",
-            "compilerPath": "C:/toolchain/gcc-arm-none-eabi-9-2020-q2-update-win32/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "C:/toolchain/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc.exe",
             "intelliSenseMode": "gcc-arm",
             "browse": {
                 // "limitSymbolsToIncludedHeaders": true
