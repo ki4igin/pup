@@ -182,7 +182,7 @@ static void cmd_cor_array_proc(uint32_t arg)
                 uint32_t i;
                 uint32_t j;
                 for (i = 0, j = arg * 900; i < (RX_BUF_COR - 1); i = +2, j++) {
-                    cor_array[j] = (int16_t)(__REV16(*(uint16_t*)&rx_buf_cor[i]));
+                    cor_array[j] = (int16_t)(__REV16(*(uint16_t *)&rx_buf_cor[i]));
                 }
                 send_cmd(CMD_COR_ARRAY_KAMA, arg);
             }
@@ -340,7 +340,7 @@ void main(void)
 
                 if (is_valid_checksum_oper(rx_data, RX_OPER_SIZE)) {
                     uint8_t cmd = rx_data[0] & 0xF;
-                    uint32_t arg = __REV(*(uint32_t*)&rx_data[1]);
+                    uint32_t arg = __REV(*(uint32_t *)&rx_data[1]);
                     if (cmd == CMD_MODE) {
                         switch (rx_data[4]) {
                         case MODE_OFF:
@@ -397,9 +397,8 @@ void main(void)
                             break;
                         }
                     } else if (cmd == CMD_DEG) {
-                        if (mode == MODE_KAMA) {
-                        } else {
-                            current_deg_oper = (rx_data[3] << 8) + rx_data[4];
+                        current_deg_oper = (rx_data[3] << 8) + rx_data[4];
+                        if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper, cor_oper);
                         }
                     } else if (cmd == CMD_SHIFT) {
@@ -407,10 +406,14 @@ void main(void)
                         New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
                     } else if (cmd == CMD_COR_OPER) {
                         cor_oper = (rx_data[1] << 8) + rx_data[2];
-                        Calc_Ampl(current_deg_oper, cor_oper);
+                        if (mode != MODE_KAMA) {
+                            Calc_Ampl(current_deg_oper, cor_oper);
+                        }
                     } else if (cmd == CMD_COR_KAMA) {
-                        cor_oper = (rx_data[1] << 8) + rx_data[2];
-                        Calc_Ampl(current_deg_kama, cor_kama);
+                        cor_kama = (rx_data[1] << 8) + rx_data[2];
+                        if (cmd != MODE_OPER) {
+                            Calc_Ampl(current_deg_kama, cor_kama);
+                        }
                     } else if (cmd == CMD_COR_ARRAY_KAMA) {
                         cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {
