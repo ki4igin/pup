@@ -23,7 +23,7 @@
 #include "version.h"
 
 int16_t cor_oper = 0;
-int16_t cor_kama = 0;
+int16_t cor_kama_paralax = 0;
 
 uint8_t ReciveByte = 0x00;
 
@@ -58,7 +58,7 @@ uint32_t period_us = 0;
 #define RX_OPER_SIZE 6
 #define TX_OPER_SIZE 6
 #define RX_KAMA_SIZE 26
-#define RX_BUF_COR   1801
+#define RX_BUF_COR   901
 
 struct rx_buf {
     uint32_t cnt;
@@ -142,8 +142,8 @@ enum cmd {
     CMD_NO_ZAP = 0x4,
     CMD_ZAP_SMALL = 0x5,
     CMD_COR_OPER = 0x6,
-    CMD_COR_KAMA = 0x7,
-    CMD_COR_ARRAY_KAMA = 0x8,
+    CMD_COR_KAMA_PARALAX = 0x7,
+    CMD_COR_ARRAY = 0x8,
     CMD_VER = 0xF,
 };
 
@@ -175,27 +175,27 @@ static void send_cmd(enum cmd cmd, uint32_t arg)
 
 static void cmd_cor_array_proc(uint32_t arg)
 {
-    if (arg <= 4) {
+    if (arg < 4) {
         NVIC_DisableIRQ(UART2_IRQn);
-        if (uart_receive_buf(MDR_UART2, rx_buf_cor, RX_BUF_COR, 40)) {
+        if (uart_receive_buf(MDR_UART2, rx_buf_cor, RX_BUF_COR, 100)) {
             if (is_valid_checksum_oper(rx_buf_cor, RX_BUF_COR)) {
                 uint32_t i;
                 uint32_t j;
-                for (i = 0, j = arg * 900; i < (RX_BUF_COR - 1); i = +2, j++) {
-                    cor_array[j] = (int16_t)(__REV16(*(uint16_t *)&rx_buf_cor[i]));
+                for (i = 0, j = arg * 900; i < (RX_BUF_COR - 1); i++, j++) {
+                    cor_array[j] = (int8_t)rx_buf_cor[i];
                 }
-                send_cmd(CMD_COR_ARRAY_KAMA, arg);
+                send_cmd(CMD_COR_ARRAY, arg);
             }
         }
         NVIC_EnableIRQ(UART2_IRQn);
     }
     if (arg == 10) {
         flag_cor_array_en = 0;
-        send_cmd(CMD_COR_ARRAY_KAMA, arg);
+        send_cmd(CMD_COR_ARRAY, arg);
     }
     if (arg == 11) {
         flag_cor_array_en = 1;
-        send_cmd(CMD_COR_ARRAY_KAMA, arg);
+        send_cmd(CMD_COR_ARRAY, arg);
     }
 }
 
@@ -328,8 +328,8 @@ void main(void)
 
                 deg_temp = ((deg_temp * 3600) >> 15);
 
-                current_deg_kama = deg_temp;
-                Calc_Ampl(deg_temp, cor_kama);
+                current_deg_kama = deg_temp + cor_kama_paralax;
+                Calc_Ampl(current_deg_kama, cor_oper);
             }
             /////
         } else {
@@ -409,12 +409,12 @@ void main(void)
                         if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper, cor_oper);
                         }
-                    } else if (cmd == CMD_COR_KAMA) {
-                        cor_kama = (rx_data[1] << 8) + rx_data[2];
-                        if (cmd != MODE_OPER) {
-                            Calc_Ampl(current_deg_kama, cor_kama);
-                        }
-                    } else if (cmd == CMD_COR_ARRAY_KAMA) {
+                    } else if (cmd == CMD_COR_KAMA_PARALAX) {
+                        cor_kama_paralax = (rx_data[1] << 8) + rx_data[2];
+                        // if (mode != MODE_OPER) {
+                        //     Calc_Ampl(current_deg_kama, cor_kama_paralax);
+                        // }
+                    } else if (cmd == CMD_COR_ARRAY) {
                         cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {
                         send_cmd(CMD_VER, VERSION);
