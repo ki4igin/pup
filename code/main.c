@@ -305,7 +305,7 @@ void main(void)
                 if (data[18] & 0x40) {
                     um_first = 0 - um_first;
                 }
-                uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] >> 21); // = 3km
+                uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] << 21); // = 3km
 
                 N_Coord_Kama.az = az_first;
                 N_Coord_Kama.el = um_first;
