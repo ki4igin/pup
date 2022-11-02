@@ -2,7 +2,7 @@
 # Build version
 ###############################################################################
 GIT_TAG := $(shell git show-ref --tags --abbrev)
-GIT_VER := $(subst v, ,$(notdir $(lastword $(GIT_TAG))))
+GIT_VER := $(subst v,,$(notdir $(lastword $(GIT_TAG))))
 GIT_COMMIT := $(lastword $(filter-out $(lastword $(GIT_TAG)),$(GIT_TAG)))
 
 VERSION := $(GIT_VER)
@@ -26,7 +26,12 @@ endif
 
 VERSION_COMMIT := $(shell echo $(GIT_COMMIT) | tr a-f A-F)
 VERSION_COMMIT := 0x$(VERSION_COMMIT)
-VERSION_STR := "$(VERSION) $(VERSION_COMMIT)"
+VERSION_STR := v$(VERSION) $(VERSION_COMMIT)
+
+all:
+
+test:
+	@echo $(PROJECT)$(PROJECT_DIR)$(PROJECT_NAME)
 
 .PHONY: version_info
 version_info:
@@ -45,6 +50,17 @@ version_info:
 	@$(call echo_yellow,VERSION_STR:)
 	@echo $(VERSION_STR)
 
+PROJECT := $(shell find -name *.uvprojx)
+PROJECT_DIR := $(dir $(PROJECT))
+PROJECT_NAME := $(patsubst %.uvprojx,%,$(notdir $(PROJECT)))
+
+add_version:	
+	@$(call echo_yellow,VERSION_STR:)
+	@echo $(VERSION_STR)
+	$(shell sed -in "s/VERSION=0x[0-9|A-F]*/VERSION=$(VERSION_COMMIT)/g" $(PROJECT))
+
+create_frimware:
+	cp $(PROJECT_DIR)Objects/$(PROJECT_NAME).hex ./firmware/$(PROJECT_NAME)_v$(VERSION).hex
 
 ###############################################################################
 # Colors for echo -e
