@@ -3,52 +3,6 @@
 ###############################################################################
 TARGET = $(notdir $(shell pwd))
 
-###############################################################################
-# Build version
-###############################################################################
-GIT_TAG = $(shell git show-ref --tags --abbrev)
-GIT_VER = $(notdir $(lastword $(GIT_TAG)))
-GIT_COMMIT = $(firstword $(shell git show-ref --heads --abbrev))
-
-VERSION = $(GIT_VER)
-VERSION_NUM = $(subst ., ,$(VERSION))
-ifeq ($(words $(VERSION_NUM)), 3)	
-	VERSION_MAJOR = $(word 1, $(VERSION_NUM))
-	VERSION_MINOR = $(word 2, $(VERSION_NUM))
-	VERSION_REV = $(word 3, $(VERSION_NUM))
-	VERSION_NUM = $$((\
-		$(VERSION_MAJOR) << 16 + $(VERSION_MINOR) << 8 + $(VERSION_REV)\
-	))
-else ifeq ($(words $(VERSION_NUM)), 2)	
-	VERSION_MAJOR = $(word 1, $(VERSION_NUM))
-	VERSION_MINOR = $(word 2, $(VERSION_NUM))
-	VERSION_NUM = $$((\
-		$(VERSION_MAJOR) * 256 + $(VERSION_MINOR)\
-	))
-else
-	VERSION_NUM = 0
-endif
-
-VERSION_COMMIT = 0x$(shell echo $(GIT_COMMIT) | tr a-f A-F)
-VERSION_STR = $(VERSION)-$(VERSION_COMMIT)
-
-.PHONY: version_info
-version:
-	@$(call echo_yellow,GIT_TAG:)
-	@echo $(GIT_TAG)
-	@$(call echo_yellow,GIT_VER:)
-	@echo $(GIT_VER)
-	@$(call echo_yellow,GIT_COMMIT:)
-	@echo $(GIT_COMMIT)
-	@$(call echo_yellow,VERSION:)
-	@echo $(VERSION)
-	@$(call echo_yellow,VERSION_NUM:)
-	@echo $(VERSION_NUM)
-	@$(call echo_yellow,VERSION_COMMIT:)
-	@echo $(VERSION_COMMIT)
-	@$(call echo_yellow,VERSION_STR:)
-	@echo $(VERSION_STR)
-
 
 ###############################################################################
 # Build path
@@ -61,6 +15,36 @@ endif
 
 
 ###############################################################################
+# Build version
+###############################################################################
+GIT_TAG := $(shell git show-ref --tags --abbrev)
+GIT_VER := $(notdir $(lastword $(GIT_TAG)))
+GIT_COMMIT := $(firstword $(shell git show-ref --heads --abbrev))
+
+VERSION := $(GIT_VER)
+VERSION_NUM := $(subst .,,$(VERSION))
+ifeq ($(words $(VERSION_NUM)), 3)	
+	VERSION_MAJOR := $(word 1, $(VERSION_NUM))
+	VERSION_MINOR := $(word 2, $(VERSION_NUM))
+	VERSION_REV := $(word 3, $(VERSION_NUM))
+	VERSION_NUM := $$((\
+		$(VERSION_MAJOR) << 16 + $(VERSION_MINOR) << 8 + $(VERSION_REV)\
+	))
+else ifeq ($(words $(VERSION_NUM)), 2)	
+	VERSION_MAJOR := $(word 1, $(VERSION_NUM))
+	VERSION_MINOR := $(word 2, $(VERSION_NUM))
+	VERSION_NUM := $$((\
+		$(VERSION_MAJOR) * 256 + $(VERSION_MINOR)\
+	))
+else
+	VERSION_NUM := 0
+endif
+
+VERSION_COMMIT := 0x$(shell echo $(GIT_COMMIT) | tr a-f A-F)
+VERSION_STR := $(VERSION)-$(VERSION_COMMIT)
+
+
+###############################################################################
 # Source
 ###############################################################################
 # Defines
@@ -69,6 +53,7 @@ C_DEFINES += __UVISION_VERSION=530
 C_DEFINES += USE_MDR32F9Q1_Rev1
 C_DEFINES += _RTE_
 C_DEFINES += VERSION_STR=\"$(VERSION_STR)\"
+C_DEFINES += VERSION=$(VERSION_COMMIT)
 
 # includes
 INCLUDES := $(shell find code -type d)
@@ -101,6 +86,7 @@ OBJCOPY := $(CC_PATH)/$(PREFIX)fromelf
 # OBJDUMP := $(CC_PATH)/$(PREFIX)objdump
 # SZ 		:= $(CC_PATH)/$(PREFIX)size
 CC_VERSION := $(shell $(CC) --version_number)
+
 
 ###############################################################################
 # CFLAGS
@@ -137,12 +123,10 @@ CFLAGS += --md
 CFLAGS += $(addprefix -D, $(C_DEFINES))
 CFLAGS += $(addprefix -I, $(INCLUDES)) $(addprefix -I, $(INCLUDES_CC))
 
+
 ###############################################################################
 # LFLAGS
 ###############################################################################
-# link script
-# LSCRIPT := STM32G431RBTx_FLASH.ld
-
 LFLAGS := $(MCU)
 LFLAGS += --strict
 LFLAGS += --callgraph
@@ -158,7 +142,6 @@ LFLAGS += --info=summarysizes,sizes,totals,unused,veneers
 LFLAGS += --diag_suppress=9931
 
 
-
 ###############################################################################
 # HFLAGS
 ###############################################################################
@@ -169,7 +152,6 @@ HFLAGS := --i32combined
 ###############################################################################
 # build the application
 ###############################################################################
-# list of objects
 OBJECTS := $(addprefix $(BUILD_DIR)/, $(notdir $(C_SOURCES:.c=.o)))
 OBJECTS += $(addprefix $(BUILD_DIR)/, $(notdir $(A_SOURCES:.s=.o)))
 vpath %.c $(sort $(INCLUDES))
@@ -202,17 +184,11 @@ $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir -p $@
 
-###############################################################################
-# clean up
-###############################################################################
 .PHONY: clean
 clean:
 	@echo -rm -fR $(dir $(BUILD_DIR))
 	-rm -fR $(dir $(BUILD_DIR))
 
-###############################################################################
-# Flash
-###############################################################################
 utility="C:\Program Files (x86)\STMicroelectronics\STM32 ST-LINK Utility\ST-LINK Utility\ST-LINK_CLI.exe"
 .PHONY: erase
 flash: $(BUILD_DIR)/$(TARGET).hex	
@@ -224,18 +200,13 @@ erase:
 	$(utility) -ME >&-
 	@echo $(COLOR_GREEN)"Flash memory erased"$(COLOR_NC)
 
-###############################################################################
-# Info
-###############################################################################
 info:
 	$(call echo_yellow,Compile:) \"$(TARGET)\"
-	$(call echo_yellow,Version: $(VERSION)) $(VERSION_COMMIT)
-	@echo -e $(COLOR_GREEN)"Compiler version:"$(COLOR_NC) $(CC_VERSION)
-	@echo -e $(COLOR_GREEN)"Compile flags:"$(COLOR_NC) $(FLAGS)
-	@echo -e $(COLOR_GREEN)"Linking flags:"$(COLOR_NC) $(LFLAGS)
+	$(call echo_yellow,Version:) $(VERSION_STR)
+	$(call echo_green,Compiler version:) $(CC_VERSION)
+	$(call echo_green,Compile flags:) $(CFLAGS)
+	$(call echo_green,Linking flags:) $(LFLAGS)
 	@echo
-	# @echo $(OBJECTS)
-	# @echo 
 
 .PHONY: test
 test : 	
@@ -247,6 +218,23 @@ ifeq ($(wildcard $(CC_PATH)),)
 	$(error Compiler path: $(CC_PATH) not found)
 endif	
 
+.PHONY: version
+version:	
+	@$(call echo_yellow,GIT_TAG:)
+	@echo $(GIT_TAG)
+	@$(call echo_yellow,GIT_VER:)
+	@echo $(GIT_VER)
+	@$(call echo_yellow,GIT_COMMIT:)
+	@echo $(GIT_COMMIT)
+	@$(call echo_yellow,VERSION:)
+	@echo $(VERSION)
+	@$(call echo_yellow,VERSION_NUM:)
+	@echo $(VERSION_NUM)
+	@$(call echo_yellow,VERSION_COMMIT:)
+	@echo $(VERSION_COMMIT)
+	@$(call echo_yellow,VERSION_STR:)
+	@echo $(VERSION_STR)
+
 ###############################################################################
 # dependencies
 ###############################################################################
@@ -256,10 +244,10 @@ endif
 ###############################################################################
 # Colors for echo -e
 ###############################################################################
-COLOR_RED		= "\033[0;31m"
-COLOR_GREEN		= "\033[0;32m"
-COLOR_YELLOW	= "\033[0;33m"
-COLOR_NC		= "\033[0m"
+COLOR_RED		:= "\033[0;31m"
+COLOR_GREEN		:= "\033[0;32m"
+COLOR_YELLOW	:= "\033[0;33m"
+COLOR_NC		:= "\033[0m"
 
 ###############################################################################
 # Colors echo functions
