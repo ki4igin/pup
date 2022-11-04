@@ -1,7 +1,8 @@
 ###############################################################################
 # Main application file name
 ###############################################################################
-TARGET := $(notdir $(shell pwd))
+TARGET ::= $(notdir $(shell pwd))
+PHONY :=
 PHONY :=
 
 
@@ -20,12 +21,12 @@ endif
 # Build version
 ###############################################################################
 GIT_TAGS := $(shell git show-ref --tags --abbrev)
-GIT_TAG_COMMIT := $(firstword $(GIT_TAGS))
-GIT_VER := $(notdir $(lastword $(GIT_TAGS)))
+GIT_TAG_COMMIT := $(word $(words $(GIT_TAGS)), abc $(GIT_TAGS))
+GIT_TAG := $(notdir $(lastword $(GIT_TAGS)))
 GIT_COMMIT := $(firstword $(shell git show-ref --heads --abbrev))
 
-VERSION := $(GIT_VER)
-VERSION_NUM := $(subst .,,$(VERSION))
+VERSION := $(subst v,,$(GIT_TAG))
+VERSION_NUM := $(subst ., ,$(VERSION))
 ifeq ($(words $(VERSION_NUM)), 3)
 	VERSION_MAJOR := $(word 1, $(VERSION_NUM))
 	VERSION_MINOR := $(word 2, $(VERSION_NUM))
@@ -228,8 +229,7 @@ endif
 
 PHONY += version
 version:
-	@$(call echo_yellow,"GIT_TAGS:       ") $(GIT_TAGS)
-	@$(call echo_yellow,"GIT_VER:        ") $(GIT_VER)
+	@$(call echo_yellow,"GIT_TAG:        ") $(GIT_TAG)
 	@$(call echo_yellow,"GIT_TAG_COMMIT: ") $(GIT_TAG_COMMIT)
 	@$(call echo_yellow,"GIT_COMMIT:     ") $(GIT_COMMIT)
 	@$(call echo_yellow,"VERSION:        ") $(VERSION)
@@ -244,7 +244,7 @@ ifneq ($(GIT_TAG_COMMIT),$(GIT_COMMIT))
 endif
 
 create_frimware: check_version
-	$(shell git checkout $(GIT_VER))
+	$(shell git checkout $(GIT_TAG))
 	make -s build
 	$(shell git checkout master)
 
