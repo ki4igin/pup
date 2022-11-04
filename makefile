@@ -244,7 +244,7 @@ endif
 
 create_frimware: check_version
 	$(shell git checkout $(GIT_TAG))
-	make -s build
+	$(shell make -s build)
 	$(shell git checkout master)
 
 ###############################################################################
