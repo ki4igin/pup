@@ -1,7 +1,3 @@
-/////  AZIMUT///////////////
-
-/* Includes ------------------------------------------------------------------*/
-// #include "MDR32F9Qx_board.h"
 #include "MDR32F9Qx_config.h"
 #include "MDR32Fx.h"
 #include "MDR32F9Qx_uart.h"
@@ -9,7 +5,6 @@
 #include "MDR32F9Qx_rst_clk.h"
 #include "MDR32F9Qx_dac.h"
 #include "MDR32F9Qx_timer.h"
-// #include "MDR32F9Qx_it.h"
 #include "paralaks.h"
 #include "leds.h"
 #include "rcc.h"
@@ -27,10 +22,9 @@ int16_t cor_kama_paralax = 0;
 
 uint8_t ReciveByte = 0x00;
 
-uint32_t Period_Massiv[2048]; // for debug
+uint32_t Period_Massiv[2048];
 
-/* Variables for DAC ---------------------------------------------------------*/
-int16_t Sin_high = 0; /// angle = 91,3 grad
+int16_t Sin_high = 0;
 int16_t Sin_low = 4095;
 int16_t Cos_high = 71;
 int16_t Cos_low = 0;
@@ -46,7 +40,6 @@ volatile int16_t next_Cos_high = 0;
 volatile int16_t next_Sin_low = 0;
 volatile int16_t next_Cos_low = 0;
 
-/* Variables for offset sin,cos ---------------------------------------------------------*/
 uint16_t Sin_delay = 0;
 
 uint8_t NewData = 0;
@@ -54,7 +47,6 @@ uint8_t NewData = 0;
 uint16_t period = 0;
 uint32_t period_us = 0;
 
-/* Variables for UART ---------------------------------------------------------*/
 #define RX_OPER_SIZE 6
 #define TX_OPER_SIZE 6
 #define RX_KAMA_SIZE 26
@@ -88,8 +80,6 @@ uint8_t cnt_systick = 0;
 uint16_t New_offset = 0;
 
 uint8_t i;
-
-/*--------------------------------------------------------------*/
 
 typedef enum {
     None = 0x00,
@@ -126,9 +116,6 @@ uint8_t count_tx = 0;
 
 uint16_t d_period = 20832; // = 1,302 ms
 
-/* Private function prototypes -----------------------------------------------*/
-/* Private functions ---------------------------------------------------------*/
-
 void Calc_Ampl(int32_t deg, int32_t cor);
 void Timer1_Init(void);
 void Timer2_Init(void);
@@ -159,11 +146,6 @@ const uint8_t pup_id[] = {
 
 static uint32_t cnt_rx_kama = 0;
 
-// static uint8_t get_cmd_id(enum pup p, enum cmd c)
-//{
-//     uint8_t id = ((p + 1) << 4) | (c & 0xF);
-//     return id;
-// }
 static void send_cmd(enum cmd cmd, uint32_t arg)
 {
     uint8_t tx_buf[TX_OPER_SIZE] = {0};
@@ -264,7 +246,6 @@ void main(void)
     SysTick->LOAD = 0xFFFFFF; // 0.2s
     SysTick->CTRL = 0x7;
 
-    // ParalaxCalc_fixpt_initialize();
     ParalaksInit();
 
     while (1) {
@@ -297,9 +278,6 @@ void main(void)
                 uint32_t az_first = (data[13] >> 2);
                 az_first = az_first + (data[12] << 5);
                 az_first = az_first + ((data[11] & 0x07) << 12); // = 15grad
-                //////////////////////////////////
-                //			az_first = (az_first*225)>>11;
-                ///////////////////////////////////
 
                 int32_t um_first = (data[20] >> 2) + (data[19] << 5) + ((data[18] & 0x0F) << 12);
                 if (data[18] & 0x40) {
@@ -331,7 +309,6 @@ void main(void)
                 current_deg_kama = deg_temp + cor_kama_paralax;
                 Calc_Ampl(current_deg_kama, cor_oper);
             }
-            /////
         } else {
             if (flag_rx_ready == 1) {
                 flag_rx_ready = 0;
@@ -349,7 +326,7 @@ void main(void)
                             counter_ext = 0;
                             counter_ext2 = 0;
                             mode = MODE_OFF;
-                            NVIC_DisableIRQ(Timer1_IRQn); // enable interrupt Timer1
+                            NVIC_DisableIRQ(Timer1_IRQn);
                             TIMER_Cmd(MDR_TIMER1, DISABLE);
                             MDR_TIMER1->CNT = 0;
                             TIMER_Cmd(MDR_TIMER3, DISABLE);
@@ -375,7 +352,7 @@ void main(void)
                             NVIC_DisableIRQ(UART1_IRQn);
                             break;
 
-                        case MODE_KAMA: // angle from KAMA
+                        case MODE_KAMA:
                             flag_not_zapit = 0;
                             flag_zapit = 0;
                             cnt_systick = 0;
@@ -387,7 +364,6 @@ void main(void)
                             } else {
                                 mode = MODE_KAMA;
                             }
-                            // Mode = MODE_KAMA;
                             counter_ext = 0;
                             count_error_ext = 0;
                             counter_ext2 = 0;
@@ -402,7 +378,6 @@ void main(void)
                             Calc_Ampl(current_deg_oper, cor_oper);
                         }
                     } else if (cmd == CMD_SHIFT) {
-                        //	flag_offset = 1 ;
                         New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
                     } else if (cmd == CMD_COR_OPER) {
                         cor_oper = (rx_data[1] << 8) + rx_data[2];
@@ -411,9 +386,6 @@ void main(void)
                         }
                     } else if (cmd == CMD_COR_KAMA_PARALAX) {
                         cor_kama_paralax = (rx_data[1] << 8) + rx_data[2];
-                        // if (mode != MODE_OPER) {
-                        //     Calc_Ampl(current_deg_kama, cor_kama_paralax);
-                        // }
                     } else if (cmd == CMD_COR_ARRAY) {
                         cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {
@@ -431,15 +403,9 @@ void main(void)
                 count_tx++;
                 if (count_tx == 1) {
                     send_cmd(CMD_SHIFT, New_offset);
-                    // uart_send_buf(MDR_UART2, TxMassivOffset, TX_OPER_SIZE);
                 } else {
                     count_tx = 0;
                     send_cmd(CMD_MODE, mode);
-                    // uint8_t tx_buf[TX_OPER_SIZE] = {0};
-                    // tx_buf[0] = (pup_id[pup] << 4) | CMD_MODE;
-                    // tx_buf[4] = mode;
-                    // tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
-                    // uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
                 }
             }
         }
@@ -457,7 +423,7 @@ void SysTick_Handler(void)
             mode = MODE_OPER;
             MDR_TIMER1->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, ENABLE);
-            NVIC_EnableIRQ(Timer1_IRQn); // enable interrupt Timer1
+            NVIC_EnableIRQ(Timer1_IRQn);
         }
     }
     if (mode == MODE_OPER) {
@@ -478,7 +444,7 @@ void SysTick_Handler(void)
             mode = MODE_KAMA;
             MDR_TIMER1->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, ENABLE);
-            NVIC_EnableIRQ(Timer1_IRQn); // enable interrupt Timer1
+            NVIC_EnableIRQ(Timer1_IRQn);
         }
     }
     if (mode == MODE_KAMA) {
@@ -580,27 +546,6 @@ void UART1_IRQHandler(void)
     }
 }
 
-// void Parallaks(void)
-// {
-//     last_angle = current_deg_oper;
-//     next_angle_mode = last_angle;
-//     // current_deg_oper = 0;
-//     current_deg_oper = OAD;
-
-//     Check_next_angle();
-//     // MDR_PORTB->RXTX = 0x00;
-// }
-
-// void Check_next_angle()
-// {
-//     Calc_Ampl(current_deg_oper);
-// }
-
-volatile unsigned int SinOutL;
-volatile unsigned int CosOutL;
-volatile unsigned int SinOutH;
-volatile unsigned int CosOutH;
-
 void Timer2_IRQHandler(void)
 {
     count_tim2++;
@@ -608,9 +553,6 @@ void Timer2_IRQHandler(void)
         // Set low output level for DAC
         DAC1_SetData(Sin_low);
         DAC2_SetData(Cos_low);
-
-        SinOutL = Sin_low;
-        CosOutL = Cos_low;
     } else {
     }
 
@@ -646,47 +588,16 @@ void Timer1_IRQHandler(void)
                 MDR_TIMER3->CNT = 0;
                 MDR_TIMER3->ARR = New_offset;
                 MDR_TIMER3->STATUS = 0;
-                //	NVIC_EnableIRQ(Timer3_IRQn);
                 TIMER_Cmd(MDR_TIMER3, ENABLE);
 
                 if (counter_ext > 0) {
-                    // MDR_TIMER2->ARR =  (period>>1)+13000 + (d_period); //half haperiod
                 }
-                // TIMER_Cmd(MDR_TIMER2,ENABLE);
             }
-            // if (Angle_Out_Mode != None) {
-            //     count_mode_angle++;
-            //     if (count_mode_angle == 2) {
-            //         count_mode_angle = 0;
-            //         if (Angle_Out_Mode == Up) {
-            //             next_angle_mode++;
-            //             if (next_angle_mode == current_deg_oper) {
-            //                 Angle_Out_Mode = None;
-            //             } else if (next_angle_mode == 3600) {
-            //                 next_angle_mode = 0;
-            //             }
-            //         }
-            //         if (Angle_Out_Mode == Down) {
-            //             next_angle_mode--;
-            //             if (next_angle_mode == current_deg_oper) {
-            //                 Angle_Out_Mode = None;
-            //             }
-
-            //             else if (next_angle_mode == 0) {
-            //                 next_angle_mode = 3600;
-            //             }
-            //         }
-            //         //				  n_angle_cnt2++;
-            //         //				  n_angle_calc2 = next_angle_mode;
-            //         Calc_Ampl(next_angle_mode);
-            //     }
-            // }
         } else // period < 2.2 ms - sin_signala zapitki net
         {
             count_error_ext++;
             if (count_error_ext > 7) {
                 count_error_ext = 0;
-                // UART_SendData (MDR_UART2, 0xCC);
                 NVIC_DisableIRQ(Timer1_IRQn);
                 TIMER_Cmd(MDR_TIMER1, DISABLE);
                 MDR_TIMER1->CNT = 0;
@@ -696,13 +607,11 @@ void Timer1_IRQHandler(void)
 
                 mode = MODE_OFF;
                 NVIC_DisableIRQ(Timer1_IRQn);
-                //	NVIC_DisableIRQ(EXT_INT1_IRQn);
                 TIMER_Cmd(MDR_TIMER3, DISABLE);
                 MDR_TIMER3->CNT = 0;
                 send_cmd(CMD_NO_ZAP, period_us);
                 counter_ext = 0;
             } else {
-                // count_error_ext = 0;
                 if (NewData == 1) {
                     NewData = 0;
                     Sin_high = next_Sin_high;
@@ -714,7 +623,6 @@ void Timer1_IRQHandler(void)
                 if (Sin_delay == 0) {
                     MDR_TIMER3->CNT = 0;
                     MDR_TIMER3->STATUS = 0;
-                    //	NVIC_EnableIRQ(Timer3_IRQn);
                     TIMER_Cmd(MDR_TIMER3, ENABLE);
                     if (counter_ext > 0) {
                     }
@@ -740,14 +648,9 @@ void Timer3_IRQHandler(void)
     TIMER_Cmd(MDR_TIMER3, DISABLE);
     MDR_TIMER3->CNT = 0;
     MDR_TIMER3->STATUS = 0;
-    //	NVIC_DisableIRQ(Timer3_IRQn);
 
-    // Set high output level for DAC
     DAC1_SetData(Sin_high);
     DAC2_SetData(Cos_high);
-
-    SinOutH = Sin_high;
-    CosOutH = Cos_high;
 
     MDR_TIMER2->ARR = d_period; // half haperiod
     TIMER_Cmd(MDR_TIMER2, ENABLE);
