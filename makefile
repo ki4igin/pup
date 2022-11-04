@@ -3,6 +3,8 @@
 ###############################################################################
 TARGET ::= $(notdir $(shell pwd))
 PHONY :=
+TARGET ::= $(notdir $(shell pwd))
+PHONY :=
 PHONY :=
 
 
