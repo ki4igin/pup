@@ -1,10 +1,7 @@
 ###############################################################################
 # Main application file name
 ###############################################################################
-TARGET ::= $(notdir $(shell pwd))
-PHONY :=
-TARGET ::= $(notdir $(shell pwd))
-PHONY :=
+TARGET := $(notdir $(shell pwd))
 PHONY :=
 
 
