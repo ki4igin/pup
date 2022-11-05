@@ -3,8 +3,8 @@
 ###############################################################################
 TARGET := $(notdir $(shell pwd))
 PHONY :=
-FIRMWARE_DIR := firmware
 MAKEFLAGS += --silent
+
 
 ###############################################################################
 # Build path
@@ -207,8 +207,9 @@ erase:
 
 info:
 	@echo
-	$(call echo_yellow,Compile:) \"$(TARGET)\"
-	$(call echo_yellow,Version:) $(VERSION_STR)
+	$(call echo_yellow,"Target:  ") $(TARGET)
+	$(call echo_yellow,"Version: ") $(VERSION_STR)
+	$(call echo_yellow,"Build to:") $(BUILD_DIR)
 	$(call echo_green,Compiler version:) $(CC_VERSION)
 	$(call echo_green,Compiler flags:) $(CFLAGS)
 	# $(call echo_green,Includes folder:) $(INCLUDES) $(INCLUDES_CC)
@@ -242,10 +243,6 @@ ifneq ($(GIT_TAG_COMMIT),$(GIT_COMMIT))
 	$(call echo_cyan,Warning:) \
 		"Git tag commit $(GIT_TAG_COMMIT) is not eqval last commit $(GIT_COMMIT)"
 endif
-
-PHONY += create_frimware
-create_firmware: check_version build
-	cp $(BUILD_DIR)/$(TARGET).hex $(FIRMWARE_DIR)/$(TARGET)_v$(VERSION).hex
 
 
 ###############################################################################
