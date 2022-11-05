@@ -246,6 +246,8 @@ endif
 PHONY += create_frimware
 create_firmware: check_version build
 	cp $(BUILD_DIR)/$(TARGET).hex $(FIRMWARE_DIR)/$(TARGET)_v$(VERSION).hex
+	$(shell git add $(FIRMWARE_DIR)/$(TARGET)_v$(VERSION).hex)
+	$(shell git commit --amend --no-edit)
 
 
 ###############################################################################
