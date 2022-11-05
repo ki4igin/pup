@@ -3,7 +3,8 @@
 ###############################################################################
 TARGET := $(notdir $(shell pwd))
 PHONY :=
-
+FIRMWARE_DIR := firmware
+MAKEFLAGS += --silent
 
 ###############################################################################
 # Build path
@@ -242,10 +243,10 @@ ifneq ($(GIT_TAG_COMMIT),$(GIT_COMMIT))
 		"Git tag commit $(GIT_TAG_COMMIT) is not eqval last commit $(GIT_COMMIT)"
 endif
 
-create_frimware: check_version
-	$(shell git checkout $(GIT_TAG))
-	$(shell make -s build)
-	$(shell git checkout master)
+PHONY += create_frimware
+create_firmware: check_version build
+	cp $(BUILD_DIR)/$(TARGET).hex $(FIRMWARE_DIR)/$(TARGET)_v$(VERSION).hex
+
 
 ###############################################################################
 # dependencies
