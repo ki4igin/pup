@@ -58,6 +58,9 @@ C_DEFINES += USE_MDR32F9Q1_Rev1
 C_DEFINES += _RTE_
 C_DEFINES += VERSION_STR=\"$(VERSION_STR)\"
 C_DEFINES += VERSION=$(VERSION_COMMIT)
+ifeq ($(PUP_RELEASE), 1)
+C_DEFINES += PUP_RELEASE
+endif
 
 # includes
 INCLUDES := $(shell find code -type d)
@@ -165,6 +168,8 @@ vpath %.s $(sort $(INCLUDES))
 all: build
 
 build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj
+
+rebuild: clean build
 
 link: $(OBJECTS) Makefile | $(BUILD_DIR)
 	@echo
