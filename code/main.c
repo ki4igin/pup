@@ -131,6 +131,9 @@ enum cmd {
     CMD_COR_OPER = 0x6,
     CMD_COR_KAMA_PARALAX = 0x7,
     CMD_COR_ARRAY = 0x8,
+    CMD_COR_KAMA_FIRST_AZEL = 0x9,
+    CMD_COR_KAMA_FIRST_R = 0xA,
+    CMD_KAMA_POS = 0xB,
     CMD_VER = 0xF,
 };
 
@@ -208,6 +211,12 @@ static uint32_t isvalid_kama_data(SphCoord_t coord)
 
 SphCoord_t N_Coord_Kama, N_Coord_MRL;
 
+struct cor_kama_first {
+    int16_t az;
+    int16_t el;
+    int16_t r;
+} cor_kama_first = {0};
+
 #ifdef __CC_ARM
 int main(void)
 #else
@@ -275,19 +284,19 @@ void main(void)
             if (is_valid_checksum_kama((uint8_t *)&rx_buf_kama.data, RX_KAMA_SIZE)) {
                 uint8_t *data = (uint8_t *)&rx_buf_kama.data;
 
-                uint32_t az_first = (data[13] >> 2);
+                uint16_t az_first = (data[13] >> 2);
                 az_first = az_first + (data[12] << 5);
                 az_first = az_first + ((data[11] & 0x07) << 12); // = 15grad
 
-                int32_t um_first = (data[20] >> 2) + (data[19] << 5) + ((data[18] & 0x0F) << 12);
+                int16_t um_first = (data[20] >> 2) + (data[19] << 5) + ((data[18] & 0x0F) << 12);
                 if (data[18] & 0x40) {
                     um_first = 0 - um_first;
                 }
                 uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] << 21); // = 3km
 
-                N_Coord_Kama.az = az_first;
-                N_Coord_Kama.el = um_first;
-                N_Coord_Kama.r = R_first;
+                N_Coord_Kama.az = (uint16_t)(az_first * 2 + cor_kama_first.az) >> 1;
+                N_Coord_Kama.el = (int16_t)(um_first * 2 + cor_kama_first.el) >> 1;
+                N_Coord_Kama.r = R_first + cor_kama_first.r;
 
                 // фильтрация данных камы
                 if (isvalid_kama_data(N_Coord_Kama) == 0) {
@@ -386,6 +395,15 @@ void main(void)
                         }
                     } else if (cmd == CMD_COR_KAMA_PARALAX) {
                         cor_kama_paralax = (rx_data[1] << 8) + rx_data[2];
+                    } else if (cmd == CMD_COR_KAMA_FIRST_AZEL) {
+                        cor_kama_first.az = (rx_data[1] << 8) + rx_data[2];
+                        cor_kama_first.el = (rx_data[3] << 8) + rx_data[4];
+                    } else if (cmd == CMD_COR_KAMA_FIRST_R) {
+                        cor_kama_first.r = (rx_data[3] << 8) + rx_data[4];
+                    } else if (cmd == CMD_KAMA_POS) {
+                        kama_pos.x = rx_data[2];
+                        kama_pos.y = rx_data[3];
+                        kama_pos.z = rx_data[4];
                     } else if (cmd == CMD_COR_ARRAY) {
                         cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {

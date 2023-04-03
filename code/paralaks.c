@@ -10,6 +10,8 @@ const uint32_t base_x = 29;
 const uint32_t base_y = 17;
 const uint32_t base_z = 11;
 
+struct kama_pos kama_pos = {29, 17, 11};
+
 void ParalaksCalc(SphCoord_t *coordIn, SphCoord_t *coordOut)
 {
     // led_trans_on();
@@ -32,9 +34,9 @@ void ParalaksCalc(SphCoord_t *coordIn, SphCoord_t *coordOut)
         degAz,
         degEl,
         r,
-        (base_x << 24),
-        (base_y << 24),
-        (base_z << 24),
+        (kama_pos.x << 24),
+        (kama_pos.y << 24),
+        (kama_pos.z << 24),
         &coordOut->az,
         &coordOut->el,
         &coordOut->r);

@@ -11,6 +11,12 @@ typedef struct
     uint32_t r;
 } SphCoord_t;
 
+extern struct kama_pos {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+} kama_pos;
+
 // Macro -----------------------------------------------------------------------
 
 // Variables -------------------------------------------------------------------
