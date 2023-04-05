@@ -268,7 +268,7 @@ void main(void)
             counter_ext = 0;
             counter_ext2 = 0;
             mode = MODE_OFF;
-            NVIC_DisableIRQ(Timer1_IRQn); //
+            NVIC_DisableIRQ(Timer1_IRQn);
             TIMER_Cmd(MDR_TIMER3, DISABLE);
             MDR_TIMER3->CNT = 0;
             TIMER_Cmd(MDR_TIMER1, DISABLE);
@@ -404,6 +404,9 @@ void main(void)
                         kama_pos.x = rx_data[2];
                         kama_pos.y = rx_data[3];
                         kama_pos.z = rx_data[4];
+                        // base_x = rx_data[2];
+                        // base_y = rx_data[3];
+                        // base_z = rx_data[4];
                     } else if (cmd == CMD_COR_ARRAY) {
                         cmd_cor_array_proc(arg);
                     } else if (cmd == CMD_VER) {
@@ -560,6 +563,7 @@ void UART1_IRQHandler(void)
 
         if (rx_buf_kama.cnt == RX_KAMA_SIZE) {
             flag_rx_cu = 1;
+            rx_buf_kama.cnt = 0;
         }
     }
 }

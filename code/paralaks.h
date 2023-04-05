@@ -12,9 +12,9 @@ typedef struct
 } SphCoord_t;
 
 extern struct kama_pos {
-    int32_t x;
-    int32_t y;
-    int32_t z;
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
 } kama_pos;
 
 // Macro -----------------------------------------------------------------------
