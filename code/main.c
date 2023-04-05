@@ -680,15 +680,6 @@ void Timer3_IRQHandler(void)
     count_tim3++;
 }
 
-/**
- * @brief  Reports the source file ID, the source line number
- *         and expression text (if USE_ASSERT_INFO == 2) where
- *         the assert_param error has occurred.
- * @param  file_id: pointer to the source file name
- * @param  line: assert_param error line source number
- * @param  expr:
- * @retval None
- */
 
 #if (USE_ASSERT_INFO == 1)
 void assert_failed(uint32_t file_id, uint32_t line)
@@ -712,13 +703,3 @@ void assert_failed(uint32_t file_id, uint32_t line, const uint8_t *expr);
     }
 }
 #endif /* USE_ASSERT_INFO */
-
-/** @} */ /* End of group DAC_DMA_SineWave_91 */
-
-/** @} */ /* End of group __MDR32F9Q1_EVAL */
-
-/** @} */ /* End of group __MDR32F9Qx_StdPeriph_Examples */
-
-/******************* (C) COPYRIGHT 2011 Milandr *********/
-
-/* END OF FILE main.c */

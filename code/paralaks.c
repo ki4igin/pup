@@ -33,9 +33,6 @@ void ParalaksCalc(SphCoord_t *coordIn, SphCoord_t *coordOut)
         (kama_pos.x << 24),
         (kama_pos.y << 24),
         (kama_pos.z << 24),
-        // (base_x << 24),
-        // (base_y << 24),
-        // (base_z << 24),
         &coordOut->az,
         &coordOut->el,
         &coordOut->r);
