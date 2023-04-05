@@ -46,6 +46,7 @@ endif
 
 VERSION_COMMIT := 0x$(shell echo $(GIT_COMMIT) | tr a-f A-F)
 VERSION_STR := $(VERSION)-$(VERSION_COMMIT)
+VERSION_NUM_STR := $(shell printf "0x%x" $(VERSION_NUM))
 
 
 ###############################################################################
@@ -57,7 +58,7 @@ C_DEFINES += __UVISION_VERSION=530
 C_DEFINES += USE_MDR32F9Q1_Rev1
 C_DEFINES += _RTE_
 C_DEFINES += VERSION_STR=\"$(VERSION_STR)\"
-C_DEFINES += VERSION=$(VERSION_COMMIT)
+C_DEFINES += VERSION=$(VERSION_NUM_STR)
 ifeq ($(PUP_RELEASE), 1)
 C_DEFINES += PUP_RELEASE
 endif
