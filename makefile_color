@@ -1,0 +1,24 @@
+###############################################################################
+# Colors for echo -e
+###############################################################################
+COLOR_BLACK		:= "\033[31m"
+COLOR_RED		:= "\033[31m"
+COLOR_GREEN		:= "\033[32m"
+COLOR_YELLOW	:= "\033[33m"
+COLOR_BLUE		:= "\033[34m"
+COLOR_MAGENTA	:= "\033[35m"
+COLOR_CYAN		:= "\033[36m"
+COLOR_WHITE		:= "\033[37m"
+COLOR_NC		:= "\033[0m"
+
+###############################################################################
+# Colors echo functions
+###############################################################################
+echo_black = @echo -e $(COLOR_BLACK)$(1)$(COLOR_NC)$(2)
+echo_red = @echo -e $(COLOR_RED)$(1)$(COLOR_NC)$(2)
+echo_green = @echo -e $(COLOR_GREEN)$(1)$(COLOR_NC)$(2)
+echo_yellow = @echo -e $(COLOR_YELLOW)$(1)$(COLOR_NC)$(2)
+echo_blue = @echo -e $(COLOR_BLUE)$(1)$(COLOR_NC)$(2)
+echo_magenta = @echo -e $(COLOR_MAGENTA)$(1)$(COLOR_NC)$(2)
+echo_cyan = @echo -e $(COLOR_CYAN)$(1)$(COLOR_NC)$(2)
+echo_white = @echo -e $(COLOR_WHITE)$(1)$(COLOR_NC)$(2)

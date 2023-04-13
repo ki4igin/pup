@@ -1,3 +1,7 @@
+default: all
+include makefile_color
+include makefile_version
+
 ###############################################################################
 # Main application file name
 ###############################################################################
@@ -16,39 +20,6 @@ BUILD_DIR := build/debug
 DEBUG := 1
 endif
 
-
-###############################################################################
-# Build version
-###############################################################################
-GIT_TAGS := $(shell git show-ref --tags --abbrev)
-GIT_TAG_COMMIT := $(word $(words $(GIT_TAGS)), abc $(GIT_TAGS))
-GIT_TAG := $(notdir $(lastword $(GIT_TAGS)))
-GIT_COMMIT := $(firstword $(shell git show-ref --heads --abbrev))
-
-VERSION := $(subst v,,$(GIT_TAG))
-VERSION_NUM := $(subst ., ,$(VERSION))
-ifeq ($(words $(VERSION_NUM)), 3)
-	VERSION_MAJOR := $(word 1, $(VERSION_NUM))
-	VERSION_MINOR := $(word 2, $(VERSION_NUM))
-	VERSION_REV := $(word 3, $(VERSION_NUM))
-	VERSION_NUM := $$((\
-		$(VERSION_MAJOR) << 16 + $(VERSION_MINOR) << 8 + $(VERSION_REV)\
-	))
-else ifeq ($(words $(VERSION_NUM)), 2)
-	VERSION_MAJOR := $(word 1, $(VERSION_NUM))
-	VERSION_MINOR := $(word 2, $(VERSION_NUM))
-	VERSION_NUM := $$((\
-		$(VERSION_MAJOR) * 256 + $(VERSION_MINOR)\
-	))
-else
-	VERSION_NUM := 0
-endif
-
-VERSION_COMMIT := 0x$(shell echo $(GIT_COMMIT) | tr a-f A-F)
-VERSION_STR := $(VERSION)-$(VERSION_COMMIT)
-VERSION_NUM_STR := $(shell printf "0x%x" $(VERSION_NUM))
-
-
 ###############################################################################
 # Source
 ###############################################################################
@@ -58,7 +29,7 @@ C_DEFINES += __UVISION_VERSION=530
 C_DEFINES += USE_MDR32F9Q1_Rev1
 C_DEFINES += _RTE_
 C_DEFINES += VERSION_STR=\"$(VERSION_STR)\"
-C_DEFINES += VERSION=$(VERSION_NUM_STR)
+C_DEFINES += VERSION=$(VERSION_NUM)
 ifeq ($(RELEASE), 1)
 C_DEFINES += PUP_RELEASE
 endif
@@ -166,6 +137,7 @@ vpath %.c $(sort $(INCLUDES))
 vpath %.s $(sort $(INCLUDES))
 
 # Build all
+
 all: build
 
 build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj
@@ -211,11 +183,9 @@ erase:
 	$(utility) -ME >&-
 	@echo $(COLOR_GREEN)"Flash memory erased"$(COLOR_NC)
 
-info:
-	@echo
-	$(call echo_yellow,"Target:  ") $(TARGET)
-	$(call echo_yellow,"Version: ") $(VERSION_STR)
-	$(call echo_yellow,"Build to:") $(BUILD_DIR)
+info: version_info
+	$(call echo_green,"Target:") $(TARGET)
+	$(call echo_green,"Build to:") $(BUILD_DIR)
 	$(call echo_green,Compiler version:) $(CC_VERSION)
 	$(call echo_green,Compiler flags:) $(CFLAGS)
 	# $(call echo_green,Includes folder:) $(INCLUDES) $(INCLUDES_CC)
@@ -234,52 +204,10 @@ ifeq ($(wildcard $(CC_PATH)),)
 	$(error Compiler path: $(CC_PATH) not found)
 endif
 
-PHONY += version
-version:
-	@$(call echo_yellow,"GIT_TAG:        ") $(GIT_TAG)
-	@$(call echo_yellow,"GIT_TAG_COMMIT: ") $(GIT_TAG_COMMIT)
-	@$(call echo_yellow,"GIT_COMMIT:     ") $(GIT_COMMIT)
-	@$(call echo_yellow,"VERSION:        ") $(VERSION)
-	@$(call echo_yellow,"VERSION_NUM:    ") $(VERSION_NUM)
-	@$(call echo_yellow,"VERSION_COMMIT: ") $(VERSION_COMMIT)
-	@$(call echo_yellow,"VERSION_STR:    ") $(VERSION_STR)
-
-check_version:
-ifneq ($(GIT_TAG_COMMIT),$(GIT_COMMIT))
-	$(call echo_cyan,Warning:) \
-		"Git tag commit $(GIT_TAG_COMMIT) is not eqval last commit $(GIT_COMMIT)"
-endif
-
 
 ###############################################################################
 # dependencies
 ###############################################################################
 -include $(wildcard $(BUILD_DIR)/*.d)
-
-
-###############################################################################
-# Colors for echo -e
-###############################################################################
-COLOR_BLACK		:= "\033[31m"
-COLOR_RED		:= "\033[31m"
-COLOR_GREEN		:= "\033[32m"
-COLOR_YELLOW	:= "\033[33m"
-COLOR_BLUE		:= "\033[34m"
-COLOR_MAGENTA	:= "\033[35m"
-COLOR_CYAN		:= "\033[36m"
-COLOR_WHITE		:= "\033[37m"
-COLOR_NC		:= "\033[0m"
-
-###############################################################################
-# Colors echo functions
-###############################################################################
-echo_black = @echo -e $(COLOR_BLACK)$(1)$(COLOR_NC)
-echo_red = @echo -e $(COLOR_RED)$(1)$(COLOR_NC)
-echo_green = @echo -e $(COLOR_GREEN)$(1)$(COLOR_NC)
-echo_yellow = @echo -e $(COLOR_YELLOW)$(1)$(COLOR_NC)
-echo_blue = @echo -e $(COLOR_BLUE)$(1)$(COLOR_NC)
-echo_magenta = @echo -e $(COLOR_MAGENTA)$(1)$(COLOR_NC)
-echo_cyan = @echo -e $(COLOR_CYAN)$(1)$(COLOR_NC)
-echo_white = @echo -e $(COLOR_WHITE)$(1)$(COLOR_NC)
 
 .PHONY: $(PHONY)
