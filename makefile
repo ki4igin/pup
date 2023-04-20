@@ -140,7 +140,7 @@ vpath %.s $(sort $(INCLUDES))
 
 all: build
 
-build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj
+build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj $(BUILD_DIR)/$(TARGET).lst
 
 rebuild: clean build
 
@@ -153,6 +153,9 @@ $(BUILD_DIR)/$(TARGET).axf: $(OBJECTS) Makefile
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.axf Makefile | $(BUILD_DIR)
 	$(OBJCOPY) $(HFLAGS) $< --output $@
+
+$(BUILD_DIR)/%.lst: $(BUILD_DIR)/%.axf Makefile | $(BUILD_DIR)
+	$(OBJCOPY) $(CPU) --disassemble $< --output=$@ --interleave=source
 
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
 	@echo $<

@@ -488,7 +488,17 @@ void Calc_Ampl(int32_t deg, int32_t cor)
         [PUP_AZ] = -1350,
         [PUP_EL] = 0};
 
-    uint32_t ind_cor_array = deg < 0 ? 3600 + deg : deg;
+    // uint32_t ind_cor_array = deg < 0 ? deg + 3600 :deg;
+    // ind_cor_array = ind_cor_array >= 3600 ? ind_cor_array - 3600: ind_cor_array;
+    // ind_cor_array %= 3600;
+    uint32_t ind_cor_array;
+    if (deg < 0)
+        ind_cor_array = 3600 + deg;
+    else if (deg >= 3600)
+        ind_cor_array = deg - 3600;
+    else
+        ind_cor_array = deg;
+    // uint32_t ind_cor_array = deg%3600;
 
     if (flag_cor_array_en) {
         deg += cor_array[ind_cor_array];
