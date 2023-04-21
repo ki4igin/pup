@@ -17,8 +17,25 @@
 #include "check_sum.h"
 #include "version.h"
 
-int16_t cor_oper = 0;
-int16_t cor_kama_paralax = 0;
+// int16_t cor_oper = 0;
+// int16_t cor_oper_first = 0;
+// int16_t cor_kama_paralax = 0;
+// struct cor_kama_first {
+//     int16_t az;
+//     int16_t el;
+//     int16_t r;
+// } cor_kama_first = {0};
+
+struct {
+    int16_t oper;
+    int16_t oper_first;
+    int16_t kama_paralax;
+    struct {
+        int16_t az;
+        int16_t el;
+        int16_t r;
+    } kama_first;
+} cor = {0};
 
 uint8_t ReciveByte = 0x00;
 
@@ -116,7 +133,7 @@ uint8_t count_tx = 0;
 
 uint16_t d_period = 20832; // = 1,302 ms
 
-void Calc_Ampl(int32_t deg, int32_t cor);
+void Calc_Ampl(int32_t deg);
 void Timer1_Init(void);
 void Timer2_Init(void);
 void Timer3_Init(void);
@@ -127,7 +144,7 @@ enum cmd {
     CMD_DEG = 0x2,
     CMD_SHIFT = 0x3,
     CMD_NO_ZAP = 0x4,
-    CMD_ZAP_SMALL = 0x5,
+    CMD_COR_OPER_FIRST = 0x5,
     CMD_COR_OPER = 0x6,
     CMD_COR_KAMA_PARALAX = 0x7,
     CMD_COR_ARRAY = 0x8,
@@ -211,11 +228,7 @@ static uint32_t isvalid_kama_data(SphCoord_t coord)
 
 SphCoord_t N_Coord_Kama, N_Coord_MRL;
 
-struct cor_kama_first {
-    int16_t az;
-    int16_t el;
-    int16_t r;
-} cor_kama_first = {0};
+
 
 #ifdef __CC_ARM
 int main(void)
@@ -246,7 +259,7 @@ void main(void)
     dac_all_init();
 
     /* Init Angle as 46 grad */ //// ??????????????
-    Calc_Ampl(460, 0);
+    Calc_Ampl(460);
 
     /* Set PIN SHDN of RS232 */
     PORT_SetBits(MDR_PORTB, PORT_Pin_11);
@@ -294,9 +307,9 @@ void main(void)
                 }
                 uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] << 21); // = 3km
 
-                N_Coord_Kama.az = (uint16_t)(az_first * 2 + cor_kama_first.az) >> 1;
-                N_Coord_Kama.el = (int16_t)(um_first * 2 + cor_kama_first.el) >> 1;
-                N_Coord_Kama.r = R_first + cor_kama_first.r;
+                N_Coord_Kama.az = (uint16_t)(az_first * 2 + cor.kama_first.az) >> 1;
+                N_Coord_Kama.el = (int16_t)(um_first * 2 + cor.kama_first.el) >> 1;
+                N_Coord_Kama.r = R_first + cor.kama_first.r;
 
                 // фильтрация данных камы
                 if (isvalid_kama_data(N_Coord_Kama) == 0) {
@@ -315,8 +328,8 @@ void main(void)
 
                 deg_temp = ((deg_temp * 3600) >> 15);
 
-                current_deg_kama = deg_temp + cor_kama_paralax;
-                Calc_Ampl(current_deg_kama, cor_oper);
+                current_deg_kama = deg_temp + cor.kama_paralax;
+                Calc_Ampl(current_deg_kama);
             }
         } else {
             if (flag_rx_ready == 1) {
@@ -384,22 +397,22 @@ void main(void)
                     } else if (cmd == CMD_DEG) {
                         current_deg_oper = (rx_data[3] << 8) + rx_data[4];
                         if (mode != MODE_KAMA) {
-                            Calc_Ampl(current_deg_oper, cor_oper);
+                            Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_SHIFT) {
                         New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
                     } else if (cmd == CMD_COR_OPER) {
-                        cor_oper = (rx_data[1] << 8) + rx_data[2];
+                        cor.oper = (rx_data[1] << 8) + rx_data[2];
                         if (mode != MODE_KAMA) {
-                            Calc_Ampl(current_deg_oper, cor_oper);
+                            Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_KAMA_PARALAX) {
-                        cor_kama_paralax = (rx_data[1] << 8) + rx_data[2];
+                        cor.kama_paralax = (rx_data[1] << 8) + rx_data[2];
                     } else if (cmd == CMD_COR_KAMA_FIRST_AZEL) {
-                        cor_kama_first.az = (rx_data[1] << 8) + rx_data[2];
-                        cor_kama_first.el = (rx_data[3] << 8) + rx_data[4];
+                        cor.kama_first.az = (rx_data[1] << 8) + rx_data[2];
+                        cor.kama_first.el = (rx_data[3] << 8) + rx_data[4];
                     } else if (cmd == CMD_COR_KAMA_FIRST_R) {
-                        cor_kama_first.r = (rx_data[3] << 8) + rx_data[4];
+                        cor.kama_first.r = (rx_data[3] << 8) + rx_data[4];
                     } else if (cmd == CMD_KAMA_POS) {
                         kama_pos.x = rx_data[2];
                         kama_pos.y = rx_data[3];
@@ -481,7 +494,7 @@ void SysTick_Handler(void)
     flag_tx_ready = 1;
 }
 
-void Calc_Ampl(int32_t deg, int32_t cor)
+void Calc_Ampl(int32_t deg)
 {
     // shift bitwin zeros VT-sensor and drive-sensor
     const int32_t sensor_shift[] = {
@@ -504,7 +517,8 @@ void Calc_Ampl(int32_t deg, int32_t cor)
         deg += cor_array[ind_cor_array];
     }
 
-    deg += cor + sensor_shift[pup] + cor_offset_amp[pup][ind_cor_array];
+    deg += sensor_shift[pup] + cor_offset_amp[pup][ind_cor_array];
+    deg += cor.oper;
     // deg += cor + sensor_shift[pup];
     if (deg > 1800) {
         deg = deg - 3600;

@@ -140,7 +140,7 @@ vpath %.s $(sort $(INCLUDES))
 
 all: build
 
-build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj $(BUILD_DIR)/$(TARGET).lst
+build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj #$(BUILD_DIR)/$(TARGET).lst
 
 rebuild: clean build
 
