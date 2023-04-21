@@ -579,7 +579,7 @@ void UART1_IRQHandler(void)
     if (UART_GetFlagStatus(MDR_UART1, UART_FLAG_RXFF) == SET) {
         uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART1);
 
-        if (rx_byte == 0xEB) {
+        if ((rx_byte == 0xEB) && (rx_buf_kama.cnt < RX_KAMA_SIZE - 1)) {
             rx_buf_kama.cnt = 0;
         }
 
