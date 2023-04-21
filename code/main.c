@@ -49,6 +49,8 @@ int16_t Cos_low = 0;
 
 int16_t current_deg_oper = 460;
 int16_t current_deg_kama = 0;
+int16_t current_deg = 0;
+
 volatile int16_t last_angle = 0;
 volatile int16_t next_angle2 = 0;
 volatile int16_t next_angle_mode = 0;
@@ -141,7 +143,7 @@ void Parallaks(void);
 enum cmd {
     CMD_MODE = 0x1,
     CMD_DEG = 0x2,
-    CMD_SHIFT = 0x3,
+    CMD_CURRENT_DEG = 0x3,
     CMD_NO_ZAP = 0x4,
     CMD_COR_OPER_FIRST = 0x5,
     CMD_COR_OPER = 0x6,
@@ -396,8 +398,6 @@ void main(void)
                         if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper);
                         }
-                    } else if (cmd == CMD_SHIFT) {
-                        New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
                     } else if (cmd == CMD_COR_OPER_FIRST) {
                         cor.oper_first = (rx_data[1] << 8) + rx_data[2];
                         if (mode != MODE_KAMA) {
@@ -438,7 +438,7 @@ void main(void)
                 flag_tx_ready = 0;
                 count_tx++;
                 if (count_tx == 1) {
-                    send_cmd(CMD_SHIFT, New_offset);
+                    send_cmd(CMD_CURRENT_DEG, current_deg);
                 } else {
                     count_tx = 0;
                     send_cmd(CMD_MODE, mode);
@@ -502,6 +502,8 @@ void Calc_Ampl(int32_t deg)
     const int32_t sensor_shift[] = {
         [PUP_AZ] = -1350,
         [PUP_EL] = 0};
+
+    current_deg = deg;
 
     deg += cor.oper_first;
 
