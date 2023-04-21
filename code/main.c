@@ -30,6 +30,7 @@ struct {
     int16_t oper;
     int16_t oper_first;
     int16_t kama_paralax;
+
     struct {
         int16_t az;
         int16_t el;
@@ -95,8 +96,6 @@ uint8_t flag_not_zapit = 0;
 uint8_t cnt_systick = 0;
 
 uint16_t New_offset = 0;
-
-uint8_t i;
 
 typedef enum {
     None = 0x00,
@@ -227,8 +226,6 @@ static uint32_t isvalid_kama_data(SphCoord_t coord)
 }
 
 SphCoord_t N_Coord_Kama, N_Coord_MRL;
-
-
 
 #ifdef __CC_ARM
 int main(void)
@@ -401,6 +398,11 @@ void main(void)
                         }
                     } else if (cmd == CMD_SHIFT) {
                         New_offset = (rx_data[3] << 8) + rx_data[4] + 1;
+                    } else if (cmd == CMD_COR_OPER_FIRST) {
+                        cor.oper_first = (rx_data[1] << 8) + rx_data[2];
+                        if (mode != MODE_KAMA) {
+                            Calc_Ampl(current_deg_oper);
+                        }
                     } else if (cmd == CMD_COR_OPER) {
                         cor.oper = (rx_data[1] << 8) + rx_data[2];
                         if (mode != MODE_KAMA) {
@@ -501,23 +503,23 @@ void Calc_Ampl(int32_t deg)
         [PUP_AZ] = -1350,
         [PUP_EL] = 0};
 
-    // uint32_t ind_cor_array = deg < 0 ? deg + 3600 :deg;
-    // ind_cor_array = ind_cor_array >= 3600 ? ind_cor_array - 3600: ind_cor_array;
-    // ind_cor_array %= 3600;
+    deg += cor.oper_first;
+
     uint32_t ind_cor_array;
-    if (deg < 0)
+    if (deg < 0) {
         ind_cor_array = 3600 + deg;
-    else if (deg >= 3600)
+    } else if (deg >= 3600) {
         ind_cor_array = deg - 3600;
-    else
+    } else {
         ind_cor_array = deg;
+    }
     // uint32_t ind_cor_array = deg%3600;
 
     if (flag_cor_array_en) {
         deg += cor_array[ind_cor_array];
     }
-
     deg += sensor_shift[pup] + cor_offset_amp[pup][ind_cor_array];
+
     deg += cor.oper;
     // deg += cor + sensor_shift[pup];
     if (deg > 1800) {
@@ -703,7 +705,6 @@ void Timer3_IRQHandler(void)
 
     count_tim3++;
 }
-
 
 #if (USE_ASSERT_INFO == 1)
 void assert_failed(uint32_t file_id, uint32_t line)
