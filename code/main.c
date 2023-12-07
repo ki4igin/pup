@@ -5,6 +5,7 @@
 #include "MDR32F9Qx_rst_clk.h"
 #include "MDR32F9Qx_dac.h"
 #include "MDR32F9Qx_timer.h"
+#include "MDR32F9Qx_it.h"
 #include "paralaks.h"
 #include "leds.h"
 #include "rcc.h"
@@ -26,7 +27,7 @@
 //     int16_t r;
 // } cor_kama_first = {0};
 
-struct {
+static struct {
     int16_t oper;
     int16_t oper_first;
     int16_t kama_paralax;
@@ -38,66 +39,57 @@ struct {
     } kama_first;
 } cor = {0};
 
-uint8_t ReciveByte = 0x00;
+static uint32_t Period_Massiv[2048];
 
-uint32_t Period_Massiv[2048];
+static int16_t Sin_high = 0;
+static int16_t Sin_low = 4095;
+static int16_t Cos_high = 71;
+static int16_t Cos_low = 0;
 
-int16_t Sin_high = 0;
-int16_t Sin_low = 4095;
-int16_t Cos_high = 71;
-int16_t Cos_low = 0;
+static int32_t current_deg_oper = 460;
+static int32_t current_deg_kama = 0;
+static int32_t current_deg = 0;
 
-int16_t current_deg_oper = 460;
-int16_t current_deg_kama = 0;
-int16_t current_deg = 0;
+static volatile int16_t next_Sin_high = 0;
+static volatile int16_t next_Cos_high = 0;
+static volatile int16_t next_Sin_low = 0;
+static volatile int16_t next_Cos_low = 0;
 
-volatile int16_t last_angle = 0;
-volatile int16_t next_angle2 = 0;
-volatile int16_t next_angle_mode = 0;
+static uint16_t Sin_delay = 0;
 
-volatile int16_t next_Sin_high = 0;
-volatile int16_t next_Cos_high = 0;
-volatile int16_t next_Sin_low = 0;
-volatile int16_t next_Cos_low = 0;
+static uint8_t NewData = 0;
 
-uint16_t Sin_delay = 0;
-
-uint8_t NewData = 0;
-
-uint16_t period = 0;
-uint32_t period_us = 0;
+static uint32_t period = 0;
+static uint32_t period_us = 0;
 
 #define RX_OPER_SIZE 6
 #define TX_OPER_SIZE 6
 #define RX_KAMA_SIZE 26
 #define RX_BUF_COR   901
 
-struct rx_buf {
+static struct {
     uint32_t cnt;
-    uint8_t data[];
-};
+    uint8_t data[RX_OPER_SIZE];
+} rx_buf_oper = {0};
 
-struct rx_buf rx_buf_oper = {
-    .cnt = 0,
-    .data = {[0 ... RX_OPER_SIZE - 1] = 0}};
+static struct {
+    uint32_t cnt;
+    uint8_t data[RX_KAMA_SIZE];
+} rx_buf_kama = {0};
 
-struct rx_buf rx_buf_kama = {
-    .cnt = 0,
-    .data = {[0 ... RX_KAMA_SIZE - 1] = 0}};
+static uint8_t rx_buf_cor[RX_BUF_COR] = {0};
+static int16_t cor_array[3600];
+static uint32_t flag_cor_array_en = {0};
 
-uint8_t rx_buf_cor[RX_BUF_COR] = {0};
-int16_t cor_array[3600];
-uint32_t flag_cor_array_en = {0};
+static uint8_t flag_rx_ready = 0;
+static uint8_t flag_tx_ready = 0;
+static uint8_t flag_rx_cu = 0;
 
-uint8_t flag_rx_ready = 0;
-uint8_t flag_tx_ready = 0;
-uint8_t flag_rx_cu = 0;
+static uint8_t flag_zapit = 0;
+static uint8_t flag_not_zapit = 0;
+static uint8_t cnt_systick = 0;
 
-uint8_t flag_zapit = 0;
-uint8_t flag_not_zapit = 0;
-uint8_t cnt_systick = 0;
-
-uint16_t New_offset = 0;
+static uint32_t New_offset = 0;
 
 typedef enum {
     None = 0x00,
@@ -105,40 +97,28 @@ typedef enum {
     Down = 0x10
 } Angle_Out_Mode_TypeDef;
 
-#define IS_Angle_Out_Mode(Angle_Out_Mode) (((Angle_Out_Mode) == None) || ((Angle_Out_Mode) == Up) || ((Angle_Out_Mode) == Down))
-
-Angle_Out_Mode_TypeDef Angle_Out_Mode = None;
-
-enum mode {
+static enum mode {
     MODE_OFF = 0,
     MODE_OPER = 1,
     MODE_KAMA = 2
 } mode = MODE_OFF;
 
-#define IS_MODE_STATE(STATE) (((STATE) == MODE_OFF) || ((STATE) == MODE_OPER) || ((STATE) == MODE_KAMA))
+static uint8_t Pre_Complex = 0;
+static uint8_t Pre_Complex_Kama = 0;
 
-uint8_t Pre_Complex = 0;
-uint8_t Pre_Complex_Kama = 0;
+static uint32_t counter_ext = 0;
+static uint32_t counter_ext2 = 0;
 
-uint8_t count_mode_angle = 0;
-uint32_t counter_ext = 0;
-uint32_t counter_ext2 = 0;
+static uint16_t count_tim2 = 0;
+static uint16_t count_tim3 = 0;
 
-uint16_t count_tim1 = 0;
-uint16_t count_tim2 = 0;
-uint16_t count_tim3 = 0;
+static uint16_t count_error_ext = 0;
 
-uint16_t count_error_ext = 0;
+static uint8_t count_tx = 0;
 
-uint8_t count_tx = 0;
+static uint32_t d_period = 20832; // = 1,302 ms
 
-uint16_t d_period = 20832; // = 1,302 ms
-
-void Calc_Ampl(int32_t deg);
-void Timer1_Init(void);
-void Timer2_Init(void);
-void Timer3_Init(void);
-void Parallaks(void);
+static void Calc_Ampl(int32_t deg);
 
 enum cmd {
     CMD_MODE = 0x1,
@@ -160,7 +140,7 @@ static enum pup {
     PUP_EL = 1
 } pup;
 
-const uint8_t pup_id[] = {
+const static uint8_t pup_id[] = {
     [PUP_AZ] = 0x1,
     [PUP_EL] = 0x2,
 };
@@ -170,7 +150,7 @@ static uint32_t cnt_rx_kama = 0;
 static void send_cmd(enum cmd cmd, uint32_t arg)
 {
     uint8_t tx_buf[TX_OPER_SIZE] = {0};
-    tx_buf[0] = (pup_id[pup] << 4) | cmd;
+    tx_buf[0] = (uint8_t)((pup_id[pup] << 4) | cmd);
     *(uint32_t *)&tx_buf[1] = __REV(arg);
     tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
     uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
@@ -227,13 +207,9 @@ static uint32_t isvalid_kama_data(SphCoord_t coord)
     return 1;
 }
 
-SphCoord_t N_Coord_Kama, N_Coord_MRL;
+static SphCoord_t N_Coord_Kama, N_Coord_MRL;
 
-#ifdef __CC_ARM
 int main(void)
-#else
-void main(void)
-#endif
 {
     /* Disable all interrupt */
     NVIC->ICPR[0] = 0xFFFFFFFF;
@@ -296,15 +272,21 @@ void main(void)
             if (is_valid_checksum_kama((uint8_t *)&rx_buf_kama.data, RX_KAMA_SIZE)) {
                 uint8_t *data = (uint8_t *)&rx_buf_kama.data;
 
-                uint16_t az_first = (data[13] >> 2);
-                az_first = az_first + (data[12] << 5);
-                az_first = az_first + ((data[11] & 0x07) << 12); // = 15grad
+                uint16_t az_first = (uint16_t)((data[13] >> 2)
+                                               + (data[12] << 5)
+                                               + ((data[11] & 0x07) << 12));
 
-                int16_t um_first = (data[20] >> 2) + (data[19] << 5) + ((data[18] & 0x0F) << 12);
+                int16_t um_first = (int16_t)((data[20] >> 2)
+                                             + (data[19] << 5)
+                                             + ((data[18] & 0x0F) << 12));
+
                 if (data[18] & 0x40) {
                     um_first = 0 - um_first;
                 }
-                uint32_t R_first = (data[17]) + (data[16] << 7) + (data[15] << 14) + (data[14] << 21); // = 3km
+                uint32_t R_first = (data[17])
+                                 + (data[16] << 7)
+                                 + (data[15] << 14)
+                                 + (data[14] << 21); // = 3km
 
                 N_Coord_Kama.az = (uint16_t)(az_first * 2 + cor.kama_first.az) >> 1;
                 N_Coord_Kama.el = (int16_t)(um_first * 2 + cor.kama_first.el) >> 1;
@@ -394,27 +376,27 @@ void main(void)
                             break;
                         }
                     } else if (cmd == CMD_DEG) {
-                        current_deg_oper = (rx_data[3] << 8) + rx_data[4];
+                        current_deg_oper = (int16_t)((rx_data[3] << 8) + rx_data[4]);
                         if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_OPER_FIRST) {
-                        cor.oper_first = (rx_data[1] << 8) + rx_data[2];
+                        cor.oper_first = (int16_t)(rx_data[1] << 8) + rx_data[2];
                         if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_OPER) {
-                        cor.oper = (rx_data[1] << 8) + rx_data[2];
+                        cor.oper = (int16_t)((rx_data[1] << 8) + rx_data[2]);
                         if (mode != MODE_KAMA) {
                             Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_KAMA_PARALAX) {
-                        cor.kama_paralax = (rx_data[1] << 8) + rx_data[2];
+                        cor.kama_paralax = (int16_t)((rx_data[1] << 8) + rx_data[2]);
                     } else if (cmd == CMD_COR_KAMA_FIRST_AZEL) {
-                        cor.kama_first.az = (rx_data[1] << 8) + rx_data[2];
-                        cor.kama_first.el = (rx_data[3] << 8) + rx_data[4];
+                        cor.kama_first.az = (int16_t)((rx_data[1] << 8) + rx_data[2]);
+                        cor.kama_first.el = (int16_t)((rx_data[3] << 8) + rx_data[4]);
                     } else if (cmd == CMD_COR_KAMA_FIRST_R) {
-                        cor.kama_first.r = (rx_data[3] << 8) + rx_data[4];
+                        cor.kama_first.r = (int16_t)((rx_data[3] << 8) + rx_data[4]);
                     } else if (cmd == CMD_KAMA_POS) {
                         kama_pos.x = rx_data[2];
                         kama_pos.y = rx_data[3];
@@ -496,7 +478,7 @@ void SysTick_Handler(void)
     flag_tx_ready = 1;
 }
 
-void Calc_Ampl(int32_t deg)
+static void Calc_Ampl(int32_t deg)
 {
     // shift bitwin zeros VT-sensor and drive-sensor
     const int32_t sensor_shift[] = {
@@ -707,26 +689,3 @@ void Timer3_IRQHandler(void)
 
     count_tim3++;
 }
-
-#if (USE_ASSERT_INFO == 1)
-void assert_failed(uint32_t file_id, uint32_t line)
-{
-    /* User can add his own implementation to report the source file ID and line number.
-       Ex: printf("Wrong parameters value: file Id %d on line %d\r\n", file_id, line) */
-
-    /* Infinite loop */
-    while (1) {
-    }
-}
-#elif (USE_ASSERT_INFO == 2)
-void assert_failed(uint32_t file_id, uint32_t line, const uint8_t *expr);
-{
-    /* User can add his own implementation to report the source file ID, line number and
-       expression text.
-       Ex: printf("Wrong parameters value (%s): file Id %d on line %d\r\n", expr, file_id, line) */
-
-    /* Infinite loop */
-    while (1) {
-    }
-}
-#endif /* USE_ASSERT_INFO */

@@ -20,6 +20,9 @@ BUILD_DIR := build/debug
 DEBUG := 1
 endif
 
+
+LIB_DIR := drivers
+
 ###############################################################################
 # Source
 ###############################################################################
@@ -35,9 +38,12 @@ C_DEFINES += PUP_RELEASE
 endif
 
 # includes
-INCLUDES := $(shell find code -type d)
-INCLUDES += MDK-ARM/RTE/Device/MDR1986BE91
-INCLUDES += MDK-ARM/RTE/_Target_1
+INCLUDES := $(shell find ./code -type d)
+INCLUDES_LIB := $(shell find -name $(LIB_DIR))
+INCLUDES_LIB += $(shell find -name MDR1986BE91)
+INCLUDES_LIB += $(shell find -name paralax)
+INCLUDES_SRC := $(filter-out $(INCLUDES_LIB),$(INCLUDES))
+INCLUDES := $(INCLUDES_SRC) $(INCLUDES_LIB)
 
 INCLUDES_CC := C:/Users/Artem/AppData/Local/Arm/Packs/ARM/CMSIS/5.7.0/CMSIS/Core/Include
 INCLUDES_CC += C:/Users/Artem/AppData/Local/Arm/Packs/Keil/MDR1986BExx/1.4/Config
@@ -45,20 +51,23 @@ INCLUDES_CC += C:/Users/Artem/AppData/Local/Arm/Packs/Keil/MDR1986BExx/1.4/Libra
 INCLUDES_CC += C:/Users/Artem/AppData/Local/Arm/Packs/Keil/MDR1986BExx/1.4/Libraries/CMSIS/CM3/DeviceSupport/MDR32F9Qx/inc
 
 # ASM sources
-A_SOURCES := $(wildcard $(addsuffix /*.s, $(INCLUDES)))
+SOURCES_A := $(wildcard $(addsuffix /*.s, $(INCLUDES)))
 
 # C sources
-C_SOURCES := $(wildcard $(addsuffix /*.c, $(INCLUDES)))
+SOURCES_C := $(wildcard $(addsuffix /*.c, $(INCLUDES_SRC)))
+
+# C lib sources
+SOURCES_C_LIB := $(wildcard $(addsuffix /*.c, $(INCLUDES_LIB)))
 
 
 ###############################################################################
 # Compilers and Utilities binaries
 ###############################################################################
 PREFIX =
-CC_PATH ?= C:/Keil_v5/ARM/ARMCC/Bin
+CC_PATH ?= C:/Keil_v5/ARM/ARMCLANG/Bin
 
 AS 		:= $(CC_PATH)/$(PREFIX)armasm
-CC 		:= $(CC_PATH)/$(PREFIX)armcc
+CC 		:= $(CC_PATH)/$(PREFIX)armclang
 LD 		:= $(CC_PATH)/$(PREFIX)armlink
 OBJCOPY := $(CC_PATH)/$(PREFIX)fromelf
 # OBJDUMP := $(CC_PATH)/$(PREFIX)objdump
@@ -70,7 +79,7 @@ CC_VERSION := $(shell $(CC) --version_number)
 # CFLAGS
 ###############################################################################
 # CPU
-CPU := --cpu=Cortex-M3
+CPU := -mcpu=cortex-m3 
 
 # FPU
 FPU :=
@@ -80,7 +89,7 @@ MCU := $(CPU) $(FPU)
 
 # Optimization and Debug level
 ifeq ($(DEBUG), 1)
-C_DEFINES += DEBUG
+DEFINES_C += DEBUG
 OPT := -O1 --debug
 else
 OPT := -O1
@@ -88,37 +97,51 @@ endif
 
 # Compile flags
 FLAGS := $(MCU)
-FLAGS += --apcs=interwork
+FLAGS += --target=arm-arm-none-eabi 
 
-AFLAGS := $(FLAGS)
-AFLAGS += --pd "__EVAL SETA 1"
+FLAGS_A := --cpu Cortex-M3
+FLAGS_A += --pd "__EVAL SETA 1"
 
-CFLAGS := $(FLAGS)
-CFLAGS += --split_sections
-CFLAGS += --gnu
-CFLAGS += $(OPT)
-CFLAGS += --md
+FLAGS_C := $(FLAGS)
+FLAGS_C += -xc
+FLAGS_C += -std=gnu11
+FLAGS_C += $(OPT)
+FLAGS_C += -fno-rtti 
+FLAGS_C += -funsigned-char 
+FLAGS_C += -fshort-enums 
+FLAGS_C += -fshort-wchar
+FLAGS_C += -fno-ldm-stm 
+FLAGS_C += -ffunction-sections 
+FLAGS_C += -MD
 
-FLAGS_DEF := $(addprefix -D, $(C_DEFINES))
+FLAGS_C_W := -Weverything
+FLAGS_C_W += -Wno-reserved-id-macro
+FLAGS_C_W += -Wno-unused-macros
+FLAGS_C_W += -Wno-missing-noreturn
+FLAGS_C_W += -Wno-documentation
+FLAGS_C_W += -Wno-sign-conversion
+# FLAGS_C_W += -Wno-implicit-int-conversion
+# FLAGS_C_W += -Wno-double-promotion
+FLAGS_C_W += -Wno-cast-align
+FLAGS_C_W += -Wno-padded
+
+FLAGS_DEF := $(addprefix -D, $(DEFINES_C))
 FLAGS_INC := $(addprefix -I, $(INCLUDES)) $(addprefix -I, $(INCLUDES_CC))
 
 
 ###############################################################################
-# LFLAGS
+# FLAGS_L
 ###############################################################################
-LFLAGS := $(MCU)
-LFLAGS += --strict
-LFLAGS += --callgraph
-LFLAGS += --load_addr_map_info
-LFLAGS += --map
-LFLAGS += --symbols
-LFLAGS += --xref
-LFLAGS += --ro_base=0x8000000
-LFLAGS += --rw_base=0x20000000
-LFLAGS += --first=__Vectors
-LFLAGS += --entry=Reset_Handler
-LFLAGS += --info=summarysizes,sizes,totals,unused,veneers
-LFLAGS += --diag_suppress=9931
+FLAGS_L := --cpu Cortex-M3
+FLAGS_L += --ro-base 0x08000000
+FLAGS_L += --entry 0x08000000
+FLAGS_L += --rw-base 0x20000000
+FLAGS_L += --entry Reset_Handler
+FLAGS_L += --first __Vectors
+FLAGS_L += --strict 
+FLAGS_L += --summary_stderr 
+FLAGS_L += --info summarysizes
+
 
 
 ###############################################################################
@@ -131,8 +154,9 @@ HFLAGS := --i32combined
 ###############################################################################
 # build the application
 ###############################################################################
-OBJECTS := $(addprefix $(BUILD_DIR)/, $(notdir $(C_SOURCES:.c=.o)))
-OBJECTS += $(addprefix $(BUILD_DIR)/, $(notdir $(A_SOURCES:.s=.o)))
+OBJECTS := $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES_C:.c=.o)))
+OBJECTS += $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES_C_LIB:.c=.lo)))
+OBJECTS += $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES_A:.s=.o)))
 vpath %.c $(sort $(INCLUDES))
 vpath %.s $(sort $(INCLUDES))
 
@@ -140,30 +164,31 @@ vpath %.s $(sort $(INCLUDES))
 
 all: build
 
-build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj #$(BUILD_DIR)/$(TARGET).lst
+build: check_cc info link $(BUILD_DIR)/$(TARGET).hex copy_obj
 
 rebuild: clean build
 
 link: $(OBJECTS) Makefile | $(BUILD_DIR)
 	@echo
-	$(LD) $(LFLAGS) -o $(BUILD_DIR)/$(TARGET).axf --list=$(BUILD_DIR)/$(TARGET).map $(OBJECTS)
+	$(LD) $(FLAGS_L) -o $(BUILD_DIR)/$(TARGET).axf --list=$(BUILD_DIR)/$(TARGET).map $(OBJECTS)
 
 $(BUILD_DIR)/$(TARGET).axf: $(OBJECTS) Makefile
-	$(LD) $(LFLAGS) -o $@ --list=$(BUILD_DIR)/$(TARGET).map $(OBJECTS)
+	$(LD) $(FLAGS_L) -o $@ --list=$(BUILD_DIR)/$(TARGET).map $(OBJECTS)
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.axf Makefile | $(BUILD_DIR)
 	$(OBJCOPY) $(HFLAGS) $< --output $@
 
-$(BUILD_DIR)/%.lst: $(BUILD_DIR)/%.axf Makefile | $(BUILD_DIR)
-	$(OBJCOPY) $(CPU) --disassemble $< --output=$@ --interleave=source
+$(BUILD_DIR)/%.lo: %.c Makefile | $(BUILD_DIR)
+	@echo $<
+	$(CC) -c $(FLAGS_C) $(FLAGS_INC) $(FLAGS_DEF) $< -o $@
 
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
 	@echo $<
-	$(CC) -c $(CFLAGS) $(FLAGS_INC) $(FLAGS_DEF) $< -o $@ --depend_dir $(BUILD_DIR)
+	$(CC) -c $(FLAGS_C) $(FLAGS_C_W) $(FLAGS_INC) $(FLAGS_DEF) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 	@echo $<
-	$(AS) $(AFLAGS) $< -o $@
+	$(AS) $(FLAGS_A) $< -o $@
 
 $(BUILD_DIR):
 	mkdir -p $@
@@ -190,10 +215,10 @@ info: version_info
 	$(call echo_green,"Target:") $(TARGET)
 	$(call echo_green,"Build to:") $(BUILD_DIR)
 	$(call echo_green,Compiler version:) $(CC_VERSION)
-	$(call echo_green,Compiler flags:) $(CFLAGS)
-	# $(call echo_green,Includes folder:) $(INCLUDES) $(INCLUDES_CC)
-	$(call echo_green,Defines:) $(C_DEFINES)
-	$(call echo_green,Linking flags:) $(LFLAGS)
+	$(call echo_green,Compiler flags:) $(FLAGS_C)
+	$(call echo_green,Includes folder:) $(INCLUDES) $(INCLUDES_CC)
+	$(call echo_green,Defines:) $(DEFINES_C)
+	$(call echo_green,Linking flags:) $(FLAGS_L)
 	@echo
 
 PHONY += test
