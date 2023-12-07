@@ -383,12 +383,12 @@ int main(void)
                     } else if (cmd == CMD_COR_OPER_FIRST) {
                         cor.oper_first = (int16_t)(rx_data[1] << 8) + rx_data[2];
                         if (mode != MODE_KAMA) {
-                            Calc_Ampl(current_deg_oper);
+                            // Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_OPER) {
                         cor.oper = (int16_t)((rx_data[1] << 8) + rx_data[2]);
                         if (mode != MODE_KAMA) {
-                            Calc_Ampl(current_deg_oper);
+                            // Calc_Ampl(current_deg_oper);
                         }
                     } else if (cmd == CMD_COR_KAMA_PARALAX) {
                         cor.kama_paralax = (int16_t)((rx_data[1] << 8) + rx_data[2]);
