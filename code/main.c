@@ -182,28 +182,55 @@ static void cmd_cor_array_proc(uint32_t arg)
     }
 }
 
+typedef struct azel32_t {
+    int32_t az;
+    int32_t el;
+} azel32_t;
+
+typedef struct azel16_t {
+    int16_t az;
+    int16_t el;
+} azel16_t;
+
+static uint32_t is_delta_valid(azel16_t delta, int16_t maxval)
+{
+    return (delta.az < maxval) && (delta.az > -maxval)
+        && (delta.el < maxval) && (delta.el > -maxval);
+}
+
 static uint32_t isvalid_kama_data(SphCoord_t coord)
 {
-    static SphCoord_t coord_old;
-    if (cnt_rx_kama++ < 3) {
-        coord_old = coord;
-        return 1;
-    }
+    static uint32_t cnt_history = 0;
+
+    static struct azel32_t coord_history[2] = {0};
+    struct azel32_t coord_cur = {.az = coord.az, .el = coord.el};
 
     // Умножаем углы на два для автоматического переполнения
-    int16_t delta_az = (int16_t)(coord_old.az * 2 - coord.az * 2);
-    // 256 * 180 / 2^14 = 2.8125 град
-    if ((delta_az > 256 * 2) || (delta_az < -256 * 2)) {
-        return 0;
+    azel16_t delta[2];
+    for (uint32_t i = 0; i < 2; i++) {
+        delta[i] = (azel16_t){
+            .az = (int16_t)(coord_history[i].az * 2 - coord_cur.az * 2),
+            .el = (int16_t)(coord_history[i].el * 2 - coord_cur.el * 2),
+        };
     }
 
-    int16_t delta_el = (int16_t)(coord_old.el - coord.el);
-    // 256 * 180 / 2^14 = 2.8125 град
-    if ((delta_el > 256) || (delta_el < -256)) {
+    // 512 * 180 / (2^14 * 2) = 2.8125 град
+    if (is_delta_valid(delta[0], 512)) {
+        goto is_valid;
+    } else {
+        if (is_delta_valid(delta[1], 512)) {
+            cnt_history++;
+            if (cnt_history > 200) {
+                goto is_valid;
+            }
+        }
+        coord_history[1] = coord_cur;
         return 0;
     }
-
-    coord_old = coord;
+is_valid:
+    coord_history[0] = coord_cur;
+    coord_history[1] = coord_cur;
+    cnt_history = 0;
     return 1;
 }
 

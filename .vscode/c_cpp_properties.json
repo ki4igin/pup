@@ -12,7 +12,7 @@
                 "VERSION=0x02CACD3"
             ],
             "cStandard": "gnu17",
-            "compilerPath": "gcc",
+            "compilerPath": "${GCC_ARM_NONE_EABI}/arm-none-eabi-gcc.exe",
             "intelliSenseMode": "gcc-arm",
             "browse": {
                 // "limitSymbolsToIncludedHeaders": true
