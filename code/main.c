@@ -153,14 +153,14 @@ static void send_cmd(enum cmd cmd, uint32_t arg)
     tx_buf[0] = (uint8_t)((pup_id[pup] << 4) | cmd);
     *(uint32_t *)&tx_buf[1] = __REV(arg);
     tx_buf[TX_OPER_SIZE - 1] = checksum_oper_calc(tx_buf, TX_OPER_SIZE);
-    uart_send_buf(MDR_UART2, tx_buf, TX_OPER_SIZE);
+    uart_send_buf(MDR_UART1, tx_buf, TX_OPER_SIZE);
 }
 
 static void cmd_cor_array_proc(uint32_t arg)
 {
     if (arg < 4) {
-        NVIC_DisableIRQ(UART2_IRQn);
-        if (uart_receive_buf(MDR_UART2, rx_buf_cor, RX_BUF_COR, 100)) {
+        NVIC_DisableIRQ(UART1_IRQn);
+        if (uart_receive_buf(MDR_UART1, rx_buf_cor, RX_BUF_COR, 100)) {
             if (is_valid_checksum_oper(rx_buf_cor, RX_BUF_COR)) {
                 uint32_t i;
                 uint32_t j;
@@ -170,7 +170,7 @@ static void cmd_cor_array_proc(uint32_t arg)
                 send_cmd(CMD_COR_ARRAY, arg);
             }
         }
-        NVIC_EnableIRQ(UART2_IRQn);
+        NVIC_EnableIRQ(UART1_IRQn);
     }
     if (arg == 10) {
         flag_cor_array_en = 0;
@@ -255,8 +255,8 @@ int main(void)
     timer3_init();
     New_offset = MDR_TIMER3->ARR;
 
-    uart1_init();
     uart2_init();
+    uart1_init();
 
     dac_all_init();
 
@@ -361,7 +361,7 @@ int main(void)
                             MDR_TIMER1->CNT = 0;
                             TIMER_Cmd(MDR_TIMER3, DISABLE);
                             MDR_TIMER3->CNT = 0;
-                            NVIC_DisableIRQ(UART1_IRQn);
+                            NVIC_DisableIRQ(UART2_IRQn);
                             break;
                         case MODE_OPER:
                             flag_not_zapit = 0;
@@ -379,7 +379,7 @@ int main(void)
                             counter_ext = 0;
                             count_error_ext = 0;
                             counter_ext2 = 0;
-                            NVIC_DisableIRQ(UART1_IRQn);
+                            NVIC_DisableIRQ(UART2_IRQn);
                             break;
 
                         case MODE_KAMA:
@@ -398,7 +398,7 @@ int main(void)
                             count_error_ext = 0;
                             counter_ext2 = 0;
                             cnt_rx_kama = 0;
-                            NVIC_EnableIRQ(UART1_IRQn);
+                            NVIC_EnableIRQ(UART2_IRQn);
 
                             break;
                         }
@@ -563,10 +563,10 @@ static void Calc_Ampl(int32_t deg)
     NewData = 1;
 }
 
-void UART2_IRQHandler(void)
+void UART1_IRQHandler(void)
 {
-    if (UART_GetFlagStatus(MDR_UART2, UART_FLAG_RXFF) == SET) {
-        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART2);
+    if (UART_GetFlagStatus(MDR_UART1, UART_FLAG_RXFF) == SET) {
+        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART1);
 
         if (rx_buf_oper.cnt == 0) {
             if (((rx_byte >> 4) != pup_id[pup])) {
@@ -583,10 +583,10 @@ void UART2_IRQHandler(void)
     }
 }
 
-void UART1_IRQHandler(void)
+void UART2_IRQHandler(void)
 {
-    if (UART_GetFlagStatus(MDR_UART1, UART_FLAG_RXFF) == SET) {
-        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART1);
+    if (UART_GetFlagStatus(MDR_UART2, UART_FLAG_RXFF) == SET) {
+        uint8_t rx_byte = (uint8_t)UART_ReceiveData(MDR_UART2);
 
         if ((rx_byte == 0xEB) && (rx_buf_kama.cnt < RX_KAMA_SIZE - 1)) {
             rx_buf_kama.cnt = 0;
